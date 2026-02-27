@@ -3,194 +3,87 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>富士山の恵み AR（感動版）</title>
+
+<title>水龍神AR</title>
 
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
 <style>
-  body{ margin:0; overflow:hidden; font-family:system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .ui{
-    position:fixed; top:12px; left:12px; right:12px;
-    background:rgba(0,0,0,.55); color:#fff; padding:10px 12px;
-    border-radius:12px; z-index:10; line-height:1.4;
-  }
-  .ui b{ font-weight:800; }
+body{
+margin:0;
+overflow:hidden;
+font-family:system-ui;
+}
 </style>
 
-<script>
-  // 壁マーカー向け：カメラ方向に正対させたいもの用（ありがとうパネル）
-  AFRAME.registerComponent('look-at-camera', {
-    tick: function () {
-      const cam = document.querySelector('[camera]');
-      if (!cam) return;
-      this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
-    }
-  });
-
-  // 水の流れ（軽量：粒数少なめ、計算少なめ）
-  AFRAME.registerComponent('waterflow', {
-    schema: { count:{type:'int', default:38} },
-    init: function () {
-      const n = this.data.count;
-      for (let i=0; i<n; i++){
-        const drop = document.createElement('a-sphere');
-
-        const x = (Math.random() - 0.5) * 0.22;     // 横ぶれ
-        const delay = Math.random() * 2200;         // バラける
-        const dur = 1900 + Math.random()*700;       // 速さゆらぎ
-        const r = 0.018 + Math.random()*0.015;      // サイズゆらぎ
-
-        drop.setAttribute('radius', r);
-        drop.setAttribute('color', '#BFE9FF');
-        drop.setAttribute('material', 'transparent:true; opacity:0.9;');
-        drop.setAttribute('position', `${x} 1.08 0.05`);
-
-        // 富士山の上 → 川（手前）へ
-        drop.setAttribute('animation',
-          `property: position;
-           from: ${x} 1.08 0.05;
-           to:   ${x*0.35} 0.12 0.85;
-           dur:  ${dur};
-           delay:${delay};
-           loop: true;
-           easing: linear;`
-        );
-
-        // きらめき（opacityだけ揺らす：軽い）
-        drop.setAttribute('animation__twinkle',
-          `property: material.opacity;
-           from: 0.35; to: 0.95;
-           dur: ${650 + Math.random()*700};
-           dir: alternate;
-           loop: true;
-           easing: easeInOutQuad;`
-        );
-
-        this.el.appendChild(drop);
-      }
-    }
-  });
-
-  // 一定間隔で「波紋」と「水面ありがとう」を発火（軽量・確実）
-  AFRAME.registerComponent('splash-loop', {
-    schema: { interval:{type:'int', default:2200} },
-    init: function(){
-      this.last = 0;
-      this.ripple = document.querySelector('#ripple');
-      this.waterThanks = document.querySelector('#waterThanks');
-    },
-    tick: function(time){
-      if (!this.last) this.last = time;
-      if (time - this.last >= this.data.interval){
-        this.last = time;
-        if (this.ripple) this.ripple.emit('splash');
-        if (this.waterThanks) this.waterThanks.emit('splash');
-      }
-    }
-  });
-</script>
 </head>
 
 <body>
-  <div class="ui">
-    <b>体験：</b> マーカーにカメラを向けると、<b>富士山の夜明け</b>と<b>雪どけ水</b>が現れます。<br>
-    水が川に届くたび、<b>水面に「ありがとう」</b>が広がります。
-  </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="precision: medium; antialias: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
+<a-scene
+embedded
+vr-mode-ui="enabled:false"
+renderer="precision:medium;"
+arjs="sourceType:webcam;debugUIEnabled:false;"
+>
 
-    <a-assets>
-      <!-- ありがとう画像（既にリポジトリ直下に置いてある前提） -->
-      <img id="thanksImg" src="ar_thanks.png" />
-    </a-assets>
+<a-assets>
 
-    <!-- 壁に貼ったマーカー用（回転なし＝垂直面に自然） -->
-    <a-marker preset="hiro">
+<img id="dragon" src="dragon.png">
 
-      <!-- 光：全体の“神聖感” -->
-      <a-entity light="type:ambient; intensity:0.75; color:#ffffff"></a-entity>
-      <a-entity id="sunLight" light="type:point; intensity:1.2; distance:8; color:#FFE6B8"
-                position="0 1.2 -0.25"></a-entity>
+</a-assets>
 
-      <!-- 日の出（背後から上がる） -->
-      <a-entity id="sun" position="0 0.95 -0.28">
-        <a-sphere radius="0.18" color="#FFD59A" material="transparent:true; opacity:0.0;"></a-sphere>
+<a-marker preset="hiro">
 
-        <!-- 太陽が出てくる -->
-        <a-animation attribute="position" from="0 0.95 -0.28" to="0 1.18 -0.28"
-          dur="1600" direction="alternate" repeat="indefinite" easing="easeInOutQuad"></a-animation>
-        <a-animation attribute="rotation" from="0 0 0" to="0 360 0"
-          dur="12000" repeat="indefinite" easing="linear"></a-animation>
+<!-- 光 -->
+<a-light type="ambient" intensity="1.5"></a-light>
 
-        <!-- フェード（出たり消えたり） -->
-        <a-animation attribute="components.material.material.opacity"
-          dur="1800" direction="alternate" repeat="indefinite" from="0.15" to="0.75"></a-animation>
+<a-light type="point"
+position="0 1 1"
+intensity="2"
+color="#aee8ff">
+</a-light>
 
-        <!-- 光輪 -->
-        <a-ring radius-inner="0.22" radius-outer="0.35" color="#FFE6B8" opacity="0.0"
-                material="transparent:true;"></a-ring>
-        <a-animation attribute="scale" from="1 1 1" to="1.35 1.35 1.35"
-          dur="1600" direction="alternate" repeat="indefinite" easing="easeInOutQuad"></a-animation>
-        <a-animation attribute="components.material.material.opacity"
-          dur="1600" direction="alternate" repeat="indefinite" from="0.08" to="0.28"></a-animation>
-      </a-entity>
+<!-- 水龍神 -->
+<a-plane
+position="0 1 0"
+width="2"
+height="2"
+material="src:#dragon; transparent:true"
+animation="property: rotation; to:0 360 0; dur:20000; loop:true">
+</a-plane>
 
-      <!-- 富士山（壁面向け：正面に立つ） -->
-      <a-cone position="0 0.62 0.02" radius-bottom="0.78" radius-top="0.02" height="1.28" color="#3E5B4F"></a-cone>
-      <a-cone position="0 1.16 0.02" radius-bottom="0.30" radius-top="0.01" height="0.40" color="#FFFFFF"></a-cone>
+<!-- 光粒 -->
+<a-entity
+particle-system="
+preset:dust;
+color:#aee8ff,#ffffff;
+particleCount:200">
+</a-entity>
 
-      <!-- うっすら霧（感動演出） -->
-      <a-plane position="0 0.55 0.15" width="1.7" height="1.2"
-               material="color:#FFFFFF; transparent:true; opacity:0.06;"></a-plane>
+<!-- メッセージ -->
+<a-entity
+text="value:いつもありがとうございます;
+align:center;
+width:4;
+color:#ffffff"
+position="0 0.3 0.8">
+</a-entity>
 
-      <!-- 川面（手前に） -->
-      <a-plane id="river" position="0 0.07 0.88" width="1.75" height="0.58"
-               color="#2196F3" opacity="0.52" material="transparent:true;"></a-plane>
+<a-entity
+text="value:川の恵みに感謝;
+align:center;
+width:4;
+color:#aee8ff"
+position="0 0.1 0.8">
+</a-entity>
 
-      <!-- 波紋（繰り返し発火） -->
-      <a-ring id="ripple" position="0 0.075 0.88" rotation="0 0 0"
-              radius-inner="0.01" radius-outer="0.02"
-              color="#BFE9FF" opacity="0.0" material="transparent:true;">
-        <a-animation attribute="scale" from="0.6 0.6 0.6" to="2.2 2.2 2.2"
-          dur="1200" startEvents="splash" easing="easeOutQuad"></a-animation>
-        <a-animation attribute="material.opacity" from="0.55" to="0.0"
-          dur="1200" startEvents="splash" easing="easeOutQuad"></a-animation>
-      </a-ring>
+</a-marker>
 
-      <!-- 水面ありがとう（splashで拡大＋フェード） -->
-      <a-plane id="waterThanks" position="0 0.078 0.88"
-               width="0.70" height="0.30"
-               scale="0.3 0.3 0.3"
-               material="src:#thanksImg; transparent:true; opacity:0.0;">
-        <a-animation attribute="scale" from="0.3 0.3 0.3" to="2.2 2.2 2.2"
-          dur="1200" startEvents="splash" easing="easeOutQuad"></a-animation>
-        <a-animation attribute="material.opacity" from="0.0" to="0.72"
-          dur="180" startEvents="splash" easing="easeOutQuad"></a-animation>
-        <a-animation attribute="material.opacity" from="0.72" to="0.0"
-          dur="900" delay="300" startEvents="splash" easing="easeOutQuad"></a-animation>
-      </a-plane>
+<a-entity camera></a-entity>
 
-      <!-- 雪どけ水 -->
-      <a-entity waterflow="count:38"></a-entity>
+</a-scene>
 
-      <!-- 発火タイマー（波紋＆水面ありがとう） -->
-      <a-entity splash-loop="interval:2200"></a-entity>
-
-      <!-- 空中のありがとう（看板的に：読みやすい） -->
-      <a-entity position="0 1.55 0.95" look-at-camera>
-        <a-plane width="1.55" height="0.85"
-          material="src:#thanksImg; transparent:true; opacity:1;"></a-plane>
-      </a-entity>
-
-    </a-marker>
-
-    <a-entity camera></a-entity>
-  </a-scene>
 </body>
 </html>
