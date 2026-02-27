@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>水龍神AR（壁マーカー 90度補正）</title>
+  <title>水龍神AR（見え方修正版）</title>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
@@ -17,66 +17,57 @@
     }
     .ui b{ font-weight:800; }
   </style>
+
+  <script>
+    // 常にカメラの方を向く（ビルボード）
+    AFRAME.registerComponent('look-at-camera', {
+      tick: function () {
+        const cam = document.querySelector('[camera]');
+        if (!cam) return;
+        this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
+      }
+    });
+  </script>
 </head>
 
 <body>
   <div class="ui">
-    <b>壁マーカー用：</b> コンテンツを<b>90°補正</b>しています。<br>
-    文字が見えにくい場合は、下の「PNG版」も使えます。
+    <b>修正：</b> コンテンツを常にカメラ正面に向けています（壁貼り対応）。<br/>
+    水龍神が“帯”にならず、正面に表示されます。
   </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="precision: medium; antialias: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
+  <a-scene embedded vr-mode-ui="enabled:false"
+           renderer="precision: medium; antialias: true;"
+           arjs="sourceType: webcam; debugUIEnabled: false;">
+
     <a-assets>
-      <!-- 水龍神画像（あなたがアップしたファイル名に合わせてください） -->
       <img id="dragonImg" src="dragon.png" />
     </a-assets>
 
     <a-marker preset="hiro">
       <!-- ライト（神秘感） -->
       <a-entity light="type:ambient; intensity:1.0; color:#ffffff"></a-entity>
-      <a-entity light="type:point; intensity:1.8; distance:8; color:#aee8ff" position="0 1.3 1.0"></a-entity>
+      <a-entity light="type:point; intensity:1.6; distance:8; color:#aee8ff" position="0 1.2 1.2"></a-entity>
 
-      <!-- ★ここが肝：壁設置で“上から見える”問題を回転で補正 -->
-      <!-- まずは rotation="90 0 0" を試してください -->
-      <a-entity id="content" rotation="90 0 0">
+      <!-- ★ここが重要：壁貼りでも必ず正面になる -->
+      <!-- 近すぎると歪むので、zを少し前(0.6〜1.0)に -->
+      <a-entity id="content" look-at-camera position="0 1.0 0.9" scale="1 1 1">
 
-        <!-- 水龍神（2.5D：画像を板に貼って立体風に） -->
+        <!-- 水龍神（両面表示 + 少し小さめ） -->
         <a-plane
-          position="0 1.05 0.05"
-          width="2.0" height="2.0"
-          material="src:#dragonImg; transparent:true; opacity:1;"
-          animation="property: rotation; to: 0 360 0; dur: 24000; loop: true; easing: linear;"
-        ></a-plane>
+          width="1.6" height="1.6"
+          material="src:#dragonImg; transparent:true; opacity:1; side:double;">
+        </a-plane>
 
-        <!-- きらめき（軽量：小さな粒を少数） -->
-        <a-entity position="0 1.0 0.2">
-          <a-sphere radius="0.03" color="#BFE9FF" opacity="0.8" material="transparent:true;"
-            animation="property: position; from: -0.6 0.1 0; to: 0.6 0.3 0; dur: 1800; dir: alternate; loop: true;"></a-sphere>
-          <a-sphere radius="0.02" color="#ffffff" opacity="0.8" material="transparent:true;"
-            animation="property: position; from: 0.4 -0.1 0; to: -0.4 0.2 0; dur: 2100; dir: alternate; loop: true;"></a-sphere>
-          <a-sphere radius="0.02" color="#BFE9FF" opacity="0.7" material="transparent:true;"
-            animation="property: position; from: -0.2 -0.2 0; to: 0.2 0.25 0; dur: 1600; dir: alternate; loop: true;"></a-sphere>
-        </a-entity>
+        <!-- メッセージ（※以前テキスト相性があったのでPNG推奨。まずは表示だけ） -->
+        <!-- 文字を確実に出したいなら msg1.png / msg2.png を作って貼る方式が鉄板です -->
+        <a-plane position="0 -1.05 0.01" width="1.6" height="0.35"
+          material="color:#000; transparent:true; opacity:0.35; side:double;"></a-plane>
 
-        <!-- 3Dテキスト（textコンポーネント） -->
-        <a-entity
-          position="0 0.30 0.35"
-          text="value: いつもありがとうございます。; align: center; width: 3.2; color: #FFFFFF; wrapCount: 18;"
-        ></a-entity>
-
-        <a-entity
-          position="0 0.12 0.35"
-          text="value: 川の恵みに感謝; align: center; width: 3.0; color: #BFE9FF; wrapCount: 18;"
-        ></a-entity>
-
-        <!-- 文字の背景板（読みやすさUP） -->
-        <a-plane position="0 0.20 0.33" width="1.9" height="0.55"
-          material="color:#000000; transparent:true; opacity:0.35;"></a-plane>
+        <!-- 文字は PNG 推奨：とりあえず ar_thanks.png があるなら差し替えて使えます -->
+        <a-plane position="0 -1.05 0.02" width="1.55" height="0.33"
+          material="src: ar_thanks.png; transparent:true; opacity:1; side:double;">
+        </a-plane>
 
       </a-entity>
     </a-marker>
