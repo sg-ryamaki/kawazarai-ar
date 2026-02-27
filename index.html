@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>富士山→川の水 AR</title>
+  <title>ありがとう川 AR</title>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
@@ -27,92 +27,37 @@
         this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
       }
     });
-
-    // 水の粒を「上（富士山）→下（川）」へ流す簡易パーティクル
-    AFRAME.registerComponent('waterflow', {
-      schema: {
-        count: {type: 'int', default: 60},
-        from:  {type: 'vec3', default: {x:0, y:1.2, z:0.0}},   // 富士山の上
-        to:    {type: 'vec3', default: {x:0, y:0.15, z:0.75}}, // 川の位置（手前）
-        spread:{type: 'number', default: 0.18},               // ばらつき
-        speed: {type: 'number', default: 0.55}                // 速さ
-      },
-
-      init: function () {
-        this.drops = [];
-        const d = this.data;
-
-        for (let i=0; i<d.count; i++){
-          const s = document.createElement('a-sphere');
-          s.setAttribute('radius', 0.03);
-          s.setAttribute('color', '#BFE9FF');     // 水色（見やすさ優先）
-          s.setAttribute('opacity', 0.9);
-          s.setAttribute('material', 'transparent:true;');
-          this.el.appendChild(s);
-
-          this.drops.push({
-            el: s,
-            t: Math.random(),                     // 進捗（0〜1）
-            jitter: (Math.random()*2 - 1) * d.spread
-          });
-        }
-      },
-
-      tick: function (time, dt) {
-        const d = this.data;
-        const delta = (dt/1000) * d.speed;
-
-        for (const drop of this.drops){
-          drop.t += delta;
-          if (drop.t > 1) drop.t = 0;
-
-          // 線形補間（from→to）
-          const x = d.from.x + (d.to.x - d.from.x) * drop.t + drop.jitter;
-          const y = d.from.y + (d.to.y - d.from.y) * drop.t;
-          const z = d.from.z + (d.to.z - d.from.z) * drop.t;
-
-          drop.el.object3D.position.set(x, y, z);
-        }
-      }
-    });
   </script>
 </head>
 
 <body>
   <div class="ui">
     <b>手順：</b> カメラ許可 → 紙の<b>HIROマーカー</b>を映してください。<br/>
-    富士山から「水の流れ」が現れます。
+    「赤い箱」と「ありがとう（画像）」が出ます。
   </div>
 
-  <a-scene embedded vr-mode-ui="enabled:false"
-           renderer="antialias:true; precision: medium;"
-           arjs="sourceType: webcam; debugUIEnabled: false;">
+  <a-scene
+    embedded
+    vr-mode-ui="enabled:false"
+    renderer="antialias:true; precision: medium;"
+    arjs="sourceType: webcam; debugUIEnabled: false;"
+  >
+    <!-- 画像を先読み -->
+    <a-assets>
+      <img id="thanksImg" src="ar_thanks.png" />
+    </a-assets>
+
     <a-marker preset="hiro">
-      <!-- 富士山（簡易モデル：三角錐 + 雪帽子） -->
-      <a-entity position="0 0 0" rotation="-90 0 0">
-        <!-- 山体 -->
-        <a-cone position="0 0.55 0" radius-bottom="0.75" radius-top="0.02" height="1.2" color="#3E5B4F"></a-cone>
-        <!-- 雪 -->
-        <a-cone position="0 1.05 0" radius-bottom="0.28" radius-top="0.01" height="0.35" color="#FFFFFF"></a-cone>
+      <!-- 検出確認：赤い箱 -->
+      <a-box position="0 0.5 0" depth="0.3" height="0.3" width="0.3" color="red"></a-box>
 
-        <!-- 川（受け皿） -->
-        <a-plane position="0 0.05 0.75" rotation="0 0 0" width="1.5" height="0.5"
-                 color="#1E88E5" opacity="0.55" material="transparent:true;"></a-plane>
+      <!-- ありがとう（画像）：手前に出して、カメラに向ける -->
+      <a-entity position="0 1.0 0.8" look-at-camera>
+        <a-plane
+          width="1.9" height="1.0"
+          material="src: #thanksImg; transparent: true; opacity: 1;"
+        ></a-plane>
       </a-entity>
-
-      <!-- 水の粒：富士山上→川へ -->
-      <a-entity waterflow></a-entity>
-
-      <!-- ありがとう（画像）：必要なら残す -->
-      <!-- 画像ファイル ar_thanks.png を置いている場合だけ有効化してください -->
-      <a-assets>
-        <img id="thanksImg" src="ar_thanks.png" />
-      </a-assets>
-      <a-entity position="0 1.4 0.9" look-at-camera>
-        <a-plane width="1.5" height="0.8"
-          material="src: #thanksImg; transparent:true; opacity:1;"></a-plane>
-      </a-entity>
-
     </a-marker>
 
     <a-entity camera></a-entity>
