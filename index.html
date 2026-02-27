@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ありがとう川 AR</title>
+  <title>富士山→川の水 AR</title>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
@@ -27,37 +27,188 @@
         this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
       }
     });
+
+    function easeInOut(t){
+      return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
+    }
+
+    // 水の粒：富士山→川へ。着水で「水面ありがとう」を発火
+    AFRAME.registerComponent('waterflow', {
+      schema: {
+        count:  {type: 'int', default: 90},
+        from:   {type: 'vec3', default: {x:0, y:1.25, z:0.0}},  // 富士山上
+        to:     {type: 'vec3', default: {x:0, y:0.12, z:0.82}}, // 川（手前）
+        spread: {type: 'number', default: 0.22},
+        speed:  {type: 'number', default: 0.55},
+        curve:  {type: 'number', default: 0.35}
+      },
+
+      init: function () {
+        this.drops = [];
+        this.ripples = [];
+        this.thanksWater = document.querySelector('#waterThanks');
+        const d = this.data;
+
+        // 水粒
+        for (let i=0; i<d.count; i++){
+          const s = document.createElement('a-sphere');
+          const r = 0.018 + Math.random()*0.02;
+          s.setAttribute('radius', r);
+          s.setAttribute('color', '#BFE9FF');
+          s.setAttribute('opacity', 0.9);
+          s.setAttribute('material', 'transparent:true;');
+          this.el.appendChild(s);
+
+          this.drops.push({
+            el: s,
+            t: Math.random(),
+            jitterX: (Math.random()*2 - 1) * d.spread,
+            jitterZ: (Math.random()*2 - 1) * (d.spread*0.35),
+            sparkle: 0.6 + Math.random()*0.5
+          });
+        }
+
+        // 波紋（リング）
+        for (let i=0; i<6; i++){
+          const ring = document.createElement('a-ring');
+          ring.setAttribute('radius-inner', 0.01);
+          ring.setAttribute('radius-outer', 0.02);
+          ring.setAttribute('color', '#BFE9FF');
+          ring.setAttribute('opacity', 0.0);
+          ring.setAttribute('material', 'transparent:true;');
+          ring.object3D.position.set(d.to.x, d.to.y + 0.01, d.to.z);
+          this.el.appendChild(ring);
+
+          this.ripples.push({ el: ring, t: 2 });
+        }
+      },
+
+      tick: function (time, dt) {
+        const d = this.data;
+        const delta = (dt/1000) * d.speed;
+
+        // 波紋更新
+        for (const rp of this.ripples){
+          if (rp.t <= 1){
+            rp.t += (dt/1000) * 1.2;
+            const tt = rp.t;
+            const rIn = 0.03 + tt*0.22;
+            const rOut = rIn + 0.02;
+            rp.el.setAttribute('radius-inner', rIn);
+            rp.el.setAttribute('radius-outer', rOut);
+            rp.el.setAttribute('opacity', Math.max(0, 0.55*(1-tt)));
+          } else {
+            rp.el.setAttribute('opacity', 0.0);
+          }
+        }
+
+        // 水粒更新
+        for (const drop of this.drops){
+          const prevT = drop.t;
+          drop.t += delta;
+          if (drop.t > 1) drop.t = 0;
+
+          const t = easeInOut(drop.t);
+
+          const x = d.from.x + (d.to.x - d.from.x) * t + drop.jitterX;
+          const y = d.from.y + (d.to.y - d.from.y) * t;
+          const zLinear = d.from.z + (d.to.z - d.from.z) * t + drop.jitterZ;
+
+          const bulge = Math.sin(Math.PI * t) * d.curve;
+          const z = zLinear + bulge;
+
+          drop.el.object3D.position.set(x, y, z);
+
+          // きらめき
+          const op = 0.55 + 0.45*Math.sin((time/200) * drop.sparkle);
+          drop.el.setAttribute('opacity', op);
+
+          // 着水（tが周回した瞬間）
+          if (prevT > drop.t) {
+            // 波紋
+            const rp = this.ripples.find(r => r.t > 1);
+            if (rp){
+              rp.t = 0;
+              rp.el.object3D.position.set(d.to.x, d.to.y + 0.01, d.to.z);
+            }
+            // ★水面「ありがとう」発火
+            if (this.thanksWater) this.thanksWater.emit('splash');
+          }
+        }
+      }
+    });
   </script>
 </head>
 
 <body>
   <div class="ui">
     <b>手順：</b> カメラ許可 → 紙の<b>HIROマーカー</b>を映してください。<br/>
-    「赤い箱」と「ありがとう（画像）」が出ます。
+    水が川に落ちると「ありがとう」が水面に広がります。
   </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="antialias:true; precision: medium;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
-    <!-- 画像を先読み -->
-    <a-assets>
-      <img id="thanksImg" src="ar_thanks.png" />
-    </a-assets>
-
+  <a-scene embedded vr-mode-ui="enabled:false"
+           renderer="antialias:true; precision: medium;"
+           arjs="sourceType: webcam; debugUIEnabled: false;">
     <a-marker preset="hiro">
-      <!-- 検出確認：赤い箱 -->
-      <a-box position="0 0.5 0" depth="0.3" height="0.3" width="0.3" color="red"></a-box>
 
-      <!-- ありがとう（画像）：手前に出して、カメラに向ける -->
-      <a-entity position="0 1.0 0.8" look-at-camera>
-        <a-plane
-          width="1.9" height="1.0"
-          material="src: #thanksImg; transparent: true; opacity: 1;"
-        ></a-plane>
+      <!-- 画像読み込み -->
+      <a-assets>
+        <img id="thanksImg" src="ar_thanks.png" />
+      </a-assets>
+
+      <!-- 富士山＆川（マーカー面に水平になるよう -90 回転のグループ内に置く） -->
+      <a-entity position="0 0 0" rotation="-90 0 0">
+        <!-- 富士山 -->
+        <a-cone position="0 0.55 0" radius-bottom="0.78" radius-top="0.02" height="1.25" color="#3E5B4F"></a-cone>
+        <a-cone position="0 1.08 0" radius-bottom="0.30" radius-top="0.01" height="0.38" color="#FFFFFF"></a-cone>
+
+        <!-- 川面 -->
+        <a-plane id="river"
+          position="0 0.05 0.85"
+          width="1.7" height="0.55"
+          color="#1E88E5" opacity="0.50"
+          material="transparent:true;">
+        </a-plane>
+
+        <!-- ★水面ありがとう（最初は透明、splash で拡大→フェードアウト） -->
+        <a-plane id="waterThanks"
+          position="0 0.055 0.85"
+          width="0.65" height="0.28"
+          scale="0.2 0.2 0.2"
+          material="src:#thanksImg; transparent:true; opacity:0.0;">
+          <!-- 拡大 -->
+          <a-animation
+            attribute="scale"
+            from="0.2 0.2 0.2" to="2.0 2.0 2.0"
+            dur="1100" easing="easeOutQuad"
+            startEvents="splash">
+          </a-animation>
+          <!-- フェードイン -->
+          <a-animation
+            attribute="material.opacity"
+            from="0.0" to="0.70"
+            dur="180" easing="easeOutQuad"
+            startEvents="splash">
+          </a-animation>
+          <!-- フェードアウト -->
+          <a-animation
+            attribute="material.opacity"
+            from="0.70" to="0.0"
+            dur="800" delay="350" easing="easeOutQuad"
+            startEvents="splash">
+          </a-animation>
+        </a-plane>
       </a-entity>
+
+      <!-- 水の演出（着水で splash を飛ばす） -->
+      <a-entity waterflow></a-entity>
+
+      <!-- （任意）空中のありがとうパネル：残したい場合 -->
+      <a-entity position="0 1.55 0.95" look-at-camera>
+        <a-plane width="1.55" height="0.85"
+          material="src:#thanksImg; transparent:true; opacity:1;"></a-plane>
+      </a-entity>
+
     </a-marker>
 
     <a-entity camera></a-entity>
