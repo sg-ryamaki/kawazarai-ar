@@ -1,89 +1,87 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>水龍神AR（壁マーカー 90度補正）</title>
 
-<title>水龍神AR</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
-<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
-
-<style>
-body{
-margin:0;
-overflow:hidden;
-font-family:system-ui;
-}
-</style>
-
+  <style>
+    body{ margin:0; overflow:hidden; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .ui{
+      position:fixed; top:12px; left:12px; right:12px;
+      background:rgba(0,0,0,.55); color:#fff; padding:10px 12px;
+      border-radius:12px; z-index:10; line-height:1.4;
+    }
+    .ui b{ font-weight:800; }
+  </style>
 </head>
 
 <body>
+  <div class="ui">
+    <b>壁マーカー用：</b> コンテンツを<b>90°補正</b>しています。<br>
+    文字が見えにくい場合は、下の「PNG版」も使えます。
+  </div>
 
-<a-scene
-embedded
-vr-mode-ui="enabled:false"
-renderer="precision:medium;"
-arjs="sourceType:webcam;debugUIEnabled:false;"
->
+  <a-scene
+    embedded
+    vr-mode-ui="enabled:false"
+    renderer="precision: medium; antialias: true;"
+    arjs="sourceType: webcam; debugUIEnabled: false;"
+  >
+    <a-assets>
+      <!-- 水龍神画像（あなたがアップしたファイル名に合わせてください） -->
+      <img id="dragonImg" src="dragon.png" />
+    </a-assets>
 
-<a-assets>
+    <a-marker preset="hiro">
+      <!-- ライト（神秘感） -->
+      <a-entity light="type:ambient; intensity:1.0; color:#ffffff"></a-entity>
+      <a-entity light="type:point; intensity:1.8; distance:8; color:#aee8ff" position="0 1.3 1.0"></a-entity>
 
-<img id="dragon" src="dragon.png">
+      <!-- ★ここが肝：壁設置で“上から見える”問題を回転で補正 -->
+      <!-- まずは rotation="90 0 0" を試してください -->
+      <a-entity id="content" rotation="90 0 0">
 
-</a-assets>
+        <!-- 水龍神（2.5D：画像を板に貼って立体風に） -->
+        <a-plane
+          position="0 1.05 0.05"
+          width="2.0" height="2.0"
+          material="src:#dragonImg; transparent:true; opacity:1;"
+          animation="property: rotation; to: 0 360 0; dur: 24000; loop: true; easing: linear;"
+        ></a-plane>
 
-<a-marker preset="hiro">
+        <!-- きらめき（軽量：小さな粒を少数） -->
+        <a-entity position="0 1.0 0.2">
+          <a-sphere radius="0.03" color="#BFE9FF" opacity="0.8" material="transparent:true;"
+            animation="property: position; from: -0.6 0.1 0; to: 0.6 0.3 0; dur: 1800; dir: alternate; loop: true;"></a-sphere>
+          <a-sphere radius="0.02" color="#ffffff" opacity="0.8" material="transparent:true;"
+            animation="property: position; from: 0.4 -0.1 0; to: -0.4 0.2 0; dur: 2100; dir: alternate; loop: true;"></a-sphere>
+          <a-sphere radius="0.02" color="#BFE9FF" opacity="0.7" material="transparent:true;"
+            animation="property: position; from: -0.2 -0.2 0; to: 0.2 0.25 0; dur: 1600; dir: alternate; loop: true;"></a-sphere>
+        </a-entity>
 
-<!-- 光 -->
-<a-light type="ambient" intensity="1.5"></a-light>
+        <!-- 3Dテキスト（textコンポーネント） -->
+        <a-entity
+          position="0 0.30 0.35"
+          text="value: いつもありがとうございます。; align: center; width: 3.2; color: #FFFFFF; wrapCount: 18;"
+        ></a-entity>
 
-<a-light type="point"
-position="0 1 1"
-intensity="2"
-color="#aee8ff">
-</a-light>
+        <a-entity
+          position="0 0.12 0.35"
+          text="value: 川の恵みに感謝; align: center; width: 3.0; color: #BFE9FF; wrapCount: 18;"
+        ></a-entity>
 
-<!-- 水龍神 -->
-<a-plane
-position="0 1 0"
-width="2"
-height="2"
-material="src:#dragon; transparent:true"
-animation="property: rotation; to:0 360 0; dur:20000; loop:true">
-</a-plane>
+        <!-- 文字の背景板（読みやすさUP） -->
+        <a-plane position="0 0.20 0.33" width="1.9" height="0.55"
+          material="color:#000000; transparent:true; opacity:0.35;"></a-plane>
 
-<!-- 光粒 -->
-<a-entity
-particle-system="
-preset:dust;
-color:#aee8ff,#ffffff;
-particleCount:200">
-</a-entity>
+      </a-entity>
+    </a-marker>
 
-<!-- メッセージ -->
-<a-entity
-text="value:いつもありがとうございます;
-align:center;
-width:4;
-color:#ffffff"
-position="0 0.3 0.8">
-</a-entity>
-
-<a-entity
-text="value:川の恵みに感謝;
-align:center;
-width:4;
-color:#aee8ff"
-position="0 0.1 0.8">
-</a-entity>
-
-</a-marker>
-
-<a-entity camera></a-entity>
-
-</a-scene>
-
+    <a-entity camera></a-entity>
+  </a-scene>
 </body>
 </html>
