@@ -1,66 +1,79 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ありがとう川 AR</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>富士山の水 AR</title>
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
-  <style>
-    body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-    .ui{
-      position:fixed; left:12px; right:12px; top:12px;
-      background:rgba(0,0,0,.55); color:#fff; padding:10px 12px; border-radius:12px;
-      z-index:10; line-height:1.4;
-    }
-    .ui b{ font-weight:800; }
-  </style>
+<script>
+AFRAME.registerComponent('waterflow', {
+ init: function () {
 
-  <script>
-    // 常にカメラの方を向く（billboard）
-    AFRAME.registerComponent('look-at-camera', {
-      tick: function () {
-        const cam = document.querySelector('[camera]');
-        if (!cam) return;
-        this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
-      }
-    });
-  </script>
+  for (let i=0;i<25;i++){
+
+    const drop=document.createElement('a-sphere');
+    drop.setAttribute('radius','0.03');
+    drop.setAttribute('color','#8ED6FF');
+    drop.setAttribute('position','0 1 0');
+
+    drop.setAttribute('animation',
+      'property: position; to: 0 0.1 0.8; dur:2000; loop:true');
+
+    this.el.appendChild(drop);
+  }
+ }
+});
+</script>
+
+<style>
+body{margin:0;overflow:hidden;}
+</style>
 </head>
 
 <body>
-  <div class="ui">
-    <b>手順：</b> カメラ許可 → 紙の<b>HIROマーカー</b>を映してください。<br/>
-    「赤い箱」と「ありがとう（画像）」が出ます。
-  </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="antialias:true; precision: medium;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
-    <!-- 画像を先読み -->
-    <a-assets>
-      <img id="thanksImg" src="ar_thanks.png" />
-    </a-assets>
+<a-scene
+ embedded
+ vr-mode-ui="enabled:false"
+ renderer="precision: medium;"
+ arjs="sourceType:webcam;debugUIEnabled:false;"
+>
 
-    <a-marker preset="hiro">
-      <!-- 検出確認：赤い箱 -->
-      <a-box position="0 0.5 0" depth="0.3" height="0.3" width="0.3" color="red"></a-box>
+<a-marker preset="hiro">
 
-      <!-- ありがとう（画像）：手前に出して、カメラに向ける -->
-      <a-entity position="0 1.0 0.8" look-at-camera>
-        <a-plane
-          width="1.9" height="1.0"
-          material="src: #thanksImg; transparent: true; opacity: 1;"
-        ></a-plane>
-      </a-entity>
-    </a-marker>
+<!-- 富士山 -->
+<a-cone position="0 0.6 0"
+radius-bottom="0.7"
+height="1.2"
+color="#3E5B4F">
+</a-cone>
 
-    <a-entity camera></a-entity>
-  </a-scene>
+<!-- 雪 -->
+<a-cone position="0 1.1 0"
+radius-bottom="0.25"
+height="0.35"
+color="white">
+</a-cone>
+
+<!-- 川 -->
+<a-plane
+position="0 0.05 0.8"
+width="1.5"
+height="0.5"
+color="#2196F3"
+opacity="0.6">
+</a-plane>
+
+<!-- 水 -->
+<a-entity waterflow></a-entity>
+
+</a-marker>
+
+<a-entity camera></a-entity>
+
+</a-scene>
 </body>
 </html>
