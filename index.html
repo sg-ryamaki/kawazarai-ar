@@ -28,58 +28,33 @@
       }
     });
 
-    // 0..1 を曲線にする（イージング）
-    function easeInOut(t){
-      return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;
-    }
-
-    // 水の粒：曲線で富士山→川へ、キラキラ、着水で波紋
+    // 水の粒を「上（富士山）→下（川）」へ流す簡易パーティクル
     AFRAME.registerComponent('waterflow', {
       schema: {
-        count:  {type: 'int', default: 90},
-        from:   {type: 'vec3', default: {x:0, y:1.25, z:0.0}},   // 富士山上
-        to:     {type: 'vec3', default: {x:0, y:0.12, z:0.82}},  // 川（手前）
-        spread: {type: 'number', default: 0.22},
-        speed:  {type: 'number', default: 0.55},
-        curve:  {type: 'number', default: 0.35}                 // カーブ強さ
+        count: {type: 'int', default: 60},
+        from:  {type: 'vec3', default: {x:0, y:1.2, z:0.0}},   // 富士山の上
+        to:    {type: 'vec3', default: {x:0, y:0.15, z:0.75}}, // 川の位置（手前）
+        spread:{type: 'number', default: 0.18},               // ばらつき
+        speed: {type: 'number', default: 0.55}                // 速さ
       },
 
       init: function () {
         this.drops = [];
-        this.ripples = [];
         const d = this.data;
 
-        // 水粒
         for (let i=0; i<d.count; i++){
           const s = document.createElement('a-sphere');
-          const r = 0.018 + Math.random()*0.02; // サイズゆらぎ
-          s.setAttribute('radius', r);
-          s.setAttribute('color', '#BFE9FF');
+          s.setAttribute('radius', 0.03);
+          s.setAttribute('color', '#BFE9FF');     // 水色（見やすさ優先）
           s.setAttribute('opacity', 0.9);
           s.setAttribute('material', 'transparent:true;');
           this.el.appendChild(s);
 
           this.drops.push({
             el: s,
-            t: Math.random(),
-            jitterX: (Math.random()*2 - 1) * d.spread,
-            jitterZ: (Math.random()*2 - 1) * (d.spread*0.35),
-            sparkle: 0.6 + Math.random()*0.5
+            t: Math.random(),                     // 進捗（0〜1）
+            jitter: (Math.random()*2 - 1) * d.spread
           });
-        }
-
-        // 波紋（リングを数個作って使い回す）
-        for (let i=0; i<6; i++){
-          const ring = document.createElement('a-ring');
-          ring.setAttribute('radius-inner', 0.01);
-          ring.setAttribute('radius-outer', 0.02);
-          ring.setAttribute('color', '#BFE9FF');
-          ring.setAttribute('opacity', 0.0);
-          ring.setAttribute('material', 'transparent:true;');
-          ring.object3D.position.set(d.to.x, d.to.y + 0.01, d.to.z);
-          this.el.appendChild(ring);
-
-          this.ripples.push({ el: ring, t: 2 }); // t>1 は非表示扱い
         }
       },
 
@@ -87,52 +62,16 @@
         const d = this.data;
         const delta = (dt/1000) * d.speed;
 
-        // 波紋更新
-        for (const rp of this.ripples){
-          if (rp.t <= 1){
-            rp.t += (dt/1000) * 1.2; // 波紋速度
-            const tt = rp.t;
-            const rIn = 0.03 + tt*0.22;
-            const rOut = rIn + 0.02;
-            rp.el.setAttribute('radius-inner', rIn);
-            rp.el.setAttribute('radius-outer', rOut);
-            rp.el.setAttribute('opacity', Math.max(0, 0.55*(1-tt)));
-          } else {
-            rp.el.setAttribute('opacity', 0.0);
-          }
-        }
-
-        // 水粒更新
         for (const drop of this.drops){
-          const prevT = drop.t;
           drop.t += delta;
           if (drop.t > 1) drop.t = 0;
 
-          const t = easeInOut(drop.t);
-
-          // from→to の線形 + カーブ（中央を前にふくらませる）
-          const x = d.from.x + (d.to.x - d.from.x) * t + drop.jitterX;
-          const y = d.from.y + (d.to.y - d.from.y) * t;
-          const zLinear = d.from.z + (d.to.z - d.from.z) * t + drop.jitterZ;
-
-          // カーブ：t=0.5で最大、前方向(+z)に膨らむ
-          const bulge = Math.sin(Math.PI * t) * d.curve;
-          const z = zLinear + bulge;
+          // 線形補間（from→to）
+          const x = d.from.x + (d.to.x - d.from.x) * drop.t + drop.jitter;
+          const y = d.from.y + (d.to.y - d.from.y) * drop.t;
+          const z = d.from.z + (d.to.z - d.from.z) * drop.t;
 
           drop.el.object3D.position.set(x, y, z);
-
-          // キラキラ：不透明度をゆらす
-          const op = 0.55 + 0.45*Math.sin((time/200) * drop.sparkle);
-          drop.el.setAttribute('opacity', op);
-
-          // 着水（tが1を超えた瞬間）に波紋を起動
-          if (prevT > drop.t) {
-            const rp = this.ripples.find(r => r.t > 1);
-            if (rp){
-              rp.t = 0;
-              rp.el.object3D.position.set(d.to.x, d.to.y + 0.01, d.to.z);
-            }
-          }
         }
       }
     });
@@ -142,34 +81,36 @@
 <body>
   <div class="ui">
     <b>手順：</b> カメラ許可 → 紙の<b>HIROマーカー</b>を映してください。<br/>
-    富士山から川へ「水の流れ」が現れます。
+    富士山から「水の流れ」が現れます。
   </div>
 
   <a-scene embedded vr-mode-ui="enabled:false"
            renderer="antialias:true; precision: medium;"
            arjs="sourceType: webcam; debugUIEnabled: false;">
     <a-marker preset="hiro">
-
-      <!-- 富士山（簡易：山体＋雪） -->
+      <!-- 富士山（簡易モデル：三角錐 + 雪帽子） -->
       <a-entity position="0 0 0" rotation="-90 0 0">
-        <a-cone position="0 0.55 0" radius-bottom="0.78" radius-top="0.02" height="1.25" color="#3E5B4F"></a-cone>
-        <a-cone position="0 1.08 0" radius-bottom="0.30" radius-top="0.01" height="0.38" color="#FFFFFF"></a-cone>
+        <!-- 山体 -->
+        <a-cone position="0 0.55 0" radius-bottom="0.75" radius-top="0.02" height="1.2" color="#3E5B4F"></a-cone>
+        <!-- 雪 -->
+        <a-cone position="0 1.05 0" radius-bottom="0.28" radius-top="0.01" height="0.35" color="#FFFFFF"></a-cone>
 
-        <!-- 川面 -->
-        <a-plane position="0 0.05 0.85" width="1.7" height="0.55"
-                 color="#1E88E5" opacity="0.50" material="transparent:true;"></a-plane>
+        <!-- 川（受け皿） -->
+        <a-plane position="0 0.05 0.75" rotation="0 0 0" width="1.5" height="0.5"
+                 color="#1E88E5" opacity="0.55" material="transparent:true;"></a-plane>
       </a-entity>
 
-      <!-- 水の演出 -->
+      <!-- 水の粒：富士山上→川へ -->
       <a-entity waterflow></a-entity>
 
-      <!-- ありがとう（画像） -->
+      <!-- ありがとう（画像）：必要なら残す -->
+      <!-- 画像ファイル ar_thanks.png を置いている場合だけ有効化してください -->
       <a-assets>
         <img id="thanksImg" src="ar_thanks.png" />
       </a-assets>
-      <a-entity position="0 1.55 0.95" look-at-camera>
-        <a-plane width="1.55" height="0.85"
-          material="src:#thanksImg; transparent:true; opacity:1;"></a-plane>
+      <a-entity position="0 1.4 0.9" look-at-camera>
+        <a-plane width="1.5" height="0.8"
+          material="src: #thanksImg; transparent:true; opacity:1;"></a-plane>
       </a-entity>
 
     </a-marker>
