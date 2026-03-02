@@ -3,23 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>水龍神AR（見え方修正版）</title>
+  <title>水龍神AR（カスタムマーカー）</title>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
   <style>
-    body{ margin:0; overflow:hidden; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .ui{
-      position:fixed; top:12px; left:12px; right:12px;
-      background:rgba(0,0,0,.55); color:#fff; padding:10px 12px;
-      border-radius:12px; z-index:10; line-height:1.4;
+      position:fixed; left:12px; right:12px; top:12px;
+      background:rgba(0,0,0,.58); color:#fff; padding:10px 12px;
+      border-radius:12px; z-index:10; line-height:1.45;
     }
     .ui b{ font-weight:800; }
+    .badge{
+      display:inline-block; padding:2px 8px; border-radius:999px;
+      background:rgba(255,255,255,.15); margin-left:6px; font-size:12px;
+    }
   </style>
 
   <script>
-    // 常にカメラの方を向く（ビルボード）
+    // コンテンツを常にカメラ正面へ（壁設置/覗き角度で“帯”になりにくくする）
     AFRAME.registerComponent('look-at-camera', {
       tick: function () {
         const cam = document.querySelector('[camera]');
@@ -27,46 +31,66 @@
         this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
       }
     });
+
+    // マーカーを見つけたら、念のため表示トリガ（将来の演出拡張にも使える）
+    AFRAME.registerComponent('on-marker', {
+      init: function(){
+        const marker = this.el;
+        marker.addEventListener('markerFound', () => {
+          const hint = document.getElementById('hint');
+          if (hint) hint.innerHTML = '表示中<span class="badge">OK</span>';
+        });
+        marker.addEventListener('markerLost', () => {
+          const hint = document.getElementById('hint');
+          if (hint) hint.innerHTML = 'マーカーを映してください<span class="badge">待機</span>';
+        });
+      }
+    });
   </script>
 </head>
 
 <body>
   <div class="ui">
-    <b>修正：</b> コンテンツを常にカメラ正面に向けています（壁貼り対応）。<br/>
-    水龍神が“帯”にならず、正面に表示されます。
+    <b>手順：</b> カメラ許可 → 壁の「水龍神マーカー（marker.png）」を映してください。<br>
+    <span id="hint">マーカーを映してください<span class="badge">待機</span></span>
   </div>
 
-  <a-scene embedded vr-mode-ui="enabled:false"
-           renderer="precision: medium; antialias: true;"
-           arjs="sourceType: webcam; debugUIEnabled: false;">
-
+  <a-scene
+    embedded
+    vr-mode-ui="enabled:false"
+    renderer="precision: medium; antialias: true;"
+    arjs="sourceType: webcam; debugUIEnabled: false;"
+  >
     <a-assets>
+      <!-- ARで表示する画像 -->
       <img id="dragonImg" src="dragon.png" />
+      <img id="thanksImg" src="ar_thanks.png" />
     </a-assets>
 
-    <a-marker preset="hiro">
-      <!-- ライト（神秘感） -->
+    <!-- ★ここが重要：HIROではなくカスタムマーカーを読む -->
+    <a-marker type="pattern" url="pattern-marker.patt" on-marker>
+
+      <!-- 光（神秘感・視認性UP） -->
       <a-entity light="type:ambient; intensity:1.0; color:#ffffff"></a-entity>
-      <a-entity light="type:point; intensity:1.6; distance:8; color:#aee8ff" position="0 1.2 1.2"></a-entity>
+      <a-entity light="type:point; intensity:1.6; distance:10; color:#aee8ff" position="0 1.2 1.2"></a-entity>
 
-      <!-- ★ここが重要：壁貼りでも必ず正面になる -->
-      <!-- 近すぎると歪むので、zを少し前(0.6〜1.0)に -->
-      <a-entity id="content" look-at-camera position="0 1.0 0.9" scale="1 1 1">
+      <!-- コンテンツ（帯になるのを防ぐため、少し前に出してカメラ正面へ） -->
+      <a-entity id="content" look-at-camera position="0 1.0 1.0">
 
-        <!-- 水龍神（両面表示 + 少し小さめ） -->
+        <!-- 弱った水龍神（両面表示） -->
         <a-plane
-          width="1.6" height="1.6"
+          width="1.7" height="1.7"
           material="src:#dragonImg; transparent:true; opacity:1; side:double;">
         </a-plane>
 
-        <!-- メッセージ（※以前テキスト相性があったのでPNG推奨。まずは表示だけ） -->
-        <!-- 文字を確実に出したいなら msg1.png / msg2.png を作って貼る方式が鉄板です -->
-        <a-plane position="0 -1.05 0.01" width="1.6" height="0.35"
-          material="color:#000; transparent:true; opacity:0.35; side:double;"></a-plane>
+        <!-- メッセージ背景（読みやすさ） -->
+        <a-plane position="0 -1.05 0.01" width="1.8" height="0.58"
+          material="color:#000000; transparent:true; opacity:0.38; side:double;">
+        </a-plane>
 
-        <!-- 文字は PNG 推奨：とりあえず ar_thanks.png があるなら差し替えて使えます -->
-        <a-plane position="0 -1.05 0.02" width="1.55" height="0.33"
-          material="src: ar_thanks.png; transparent:true; opacity:1; side:double;">
+        <!-- ありがとう画像（文字が端末で出ない対策として“画像”で表示） -->
+        <a-plane position="0 -1.05 0.02" width="1.65" height="0.48"
+          material="src:#thanksImg; transparent:true; opacity:1; side:double;">
         </a-plane>
 
       </a-entity>
