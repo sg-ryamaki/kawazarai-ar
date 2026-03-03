@@ -52,7 +52,20 @@ a-scene{ position:fixed !important; inset:0 !important; background:transparent !
   embedded
   vr-mode-ui="enabled:false"
   renderer="antialias:true; alpha:true;"
-  arjs="sourceType:webcam; debugUIEnabled:false; trackingMethod:best;"
+  arjs="
+    sourceType: webcam;
+    debugUIEnabled: false;
+    trackingMethod: best;
+
+    /* ★検出力アップ：解像度を上げる（端末が許す範囲で） */
+    sourceWidth: 1280;
+    sourceHeight: 720;
+    displayWidth: 1280;
+    displayHeight: 720;
+
+    /* ★検出頻度（上げすぎると重いので30） */
+    maxDetectionRate: 30;
+  "
 >
   <a-assets>
     <img id="img1" src="./step1.png?v=999">
@@ -60,7 +73,6 @@ a-scene{ position:fixed !important; inset:0 !important; background:transparent !
     <img id="img3" src="./step3.png?v=999">
   </a-assets>
 
-  <!-- ★ここが最重要：pattern-marker.patt は “いま印刷してる marker.png から作ったもの” である必要あり -->
   <a-marker type="pattern" url="./pattern-marker.patt?v=999" id="marker">
     <a-image id="s1" src="#img1" position="0 0 0.01" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
     <a-image id="s2" src="#img2" position="0 0 0.02" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
@@ -87,8 +99,10 @@ marker.addEventListener("markerFound",()=>{
   statusEl.textContent="FOUND";
   statusEl.classList.add("ok");
   statusEl.classList.remove("ng");
+
   index=0;
   showStep(index);
+
   clearInterval(timer);
   timer=setInterval(()=>{
     index++;
@@ -114,29 +128,19 @@ function checkCamera(){
 }
 setInterval(checkCamera,800);
 
-// ★ patt が読み込めているかを事前にチェック（404ならここで確定）
 (async ()=>{
   try{
     const res = await fetch("./pattern-marker.patt?v=999", { cache:"no-store" });
     if(!res.ok){
       pattEl.textContent = `NG (HTTP ${res.status})`;
-      pattEl.className = "ng";
       statusEl.textContent="PATT ERROR";
       statusEl.classList.add("ng");
       return;
     }
     const txt = await res.text();
-    if(txt.length < 1000){
-      pattEl.textContent = `NG (too short: ${txt.length})`;
-      pattEl.className = "ng";
-      statusEl.textContent="PATT ERROR";
-      statusEl.classList.add("ng");
-      return;
-    }
     pattEl.textContent = `OK (${txt.length} chars)`;
   }catch(e){
     pattEl.textContent = `NG (fetch failed)`;
-    pattEl.className = "ng";
     statusEl.textContent="PATT ERROR";
     statusEl.classList.add("ng");
   }
