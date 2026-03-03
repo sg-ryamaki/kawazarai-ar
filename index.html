@@ -1,181 +1,87 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>水龍神AR（①→②→③ フェード切替）</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>水龍神AR（標準レンズ固定）</title>
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
-  <style>
-    body{ margin:0; overflow:hidden; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
-    .ui{
-      position:fixed; left:12px; right:12px; top:12px;
-      background:rgba(0,0,0,.58); color:#fff; padding:10px 12px;
-      border-radius:12px; z-index:10; line-height:1.45;
-    }
-    .pill{ display:inline-block; padding:2px 10px; border-radius:999px; background:rgba(255,255,255,.15); margin-left:8px; }
-  </style>
+<style>
+body{margin:0;overflow:hidden;font-family:sans-serif;}
+.ui{
+position:fixed;left:12px;right:12px;top:12px;
+background:rgba(0,0,0,.6);color:#fff;padding:10px 12px;
+border-radius:12px;z-index:10;
+}
+</style>
 
-  <script>
-    // 壁貼りでも“帯”になりにくくする：常にカメラ正面へ
-    AFRAME.registerComponent('look-at-camera', {
-      tick: function () {
-        const cam = document.querySelector('[camera]');
-        if (!cam) return;
-        this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
-      }
-    });
+<script>
+/* === 標準レンズを選ぶ処理 === */
+async function selectMainCamera() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d => d.kind === "videoinput");
 
-    /**
-     * ①→②→③を3秒ごとに切替。
-     * 切替はフェード（クロスフェード）：
-     *   今の画像を 0.6秒で 1→0
-     *   次の画像を 0.9秒で 0→1
-     */
-    AFRAME.registerComponent('sequence-3-fade', {
-      init: function () {
-        this.running = false;
-        this.timers = [];
+  // 広角っぽい名前を除外（機種差あるため複数ワード）
+  const main = cams.find(d =>
+    !/wide|ultra|0\.6|super/i.test(d.label)
+  );
 
-        this.p1 = document.querySelector('#p1');
-        this.p2 = document.querySelector('#p2');
-        this.p3 = document.querySelector('#p3');
-        this.statusEl = document.getElementById('status');
+  return main ? main.deviceId : null;
+}
 
-        const marker = this.el;
+window.addEventListener("load", async () => {
+  const deviceId = await selectMainCamera();
 
-        const setStatus = (text, tag) => {
-          if (!this.statusEl) return;
-          this.statusEl.innerHTML = `${text}<span class="pill">${tag}</span>`;
-        };
-
-        const clearTimers = () => {
-          this.timers.forEach(id => clearTimeout(id));
-          this.timers = [];
-        };
-
-        const hardReset = () => {
-          clearTimers();
-          this.running = false;
-
-          // 初期：①だけ表示（不透明）
-          this.p1.setAttribute('visible', true);
-          this.p2.setAttribute('visible', true); // visible=trueのままopacityで制御（アニメが確実に効く）
-          this.p3.setAttribute('visible', true);
-
-          this.p1.setAttribute('material', 'opacity', 1);
-          this.p2.setAttribute('material', 'opacity', 0);
-          this.p3.setAttribute('material', 'opacity', 0);
-
-          setStatus('マーカーを映してください', 'WAIT');
-        };
-
-        const fadeTo = (fromEl, toEl, label) => {
-          if (!fromEl || !toEl) return;
-
-          // 次を最初に透明で用意
-          toEl.setAttribute('material', 'opacity', 0);
-
-          // フェードアウト（短め）
-          fromEl.setAttribute('animation__fadeout', {
-            property: 'material.opacity',
-            from: 1,
-            to: 0,
-            dur: 600,
-            easing: 'easeOutQuad'
-          });
-
-          // フェードイン（少し長め）
-          toEl.setAttribute('animation__fadein', {
-            property: 'material.opacity',
-            from: 0,
-            to: 1,
-            dur: 900,
-            easing: 'easeOutCubic'
-          });
-
-          setStatus(`表示中：${label}`, 'OK');
-        };
-
-        const start = () => {
-          if (this.running) return;
-          this.running = true;
-
-          // ①表示スタート
-          setStatus('表示中：1', 'OK');
-
-          // 3秒後：①→②
-          this.timers.push(setTimeout(() => fadeTo(this.p1, this.p2, 2), 3000));
-
-          // 6秒後：②→③
-          this.timers.push(setTimeout(() => fadeTo(this.p2, this.p3, 3), 6000));
-
-          // ③のまま固定（ループさせたい場合はここで ①へ戻すタイマーを追加）
-          // this.timers.push(setTimeout(() => fadeTo(this.p3, this.p1, 1), 9000));
-        };
-
-        marker.addEventListener('markerFound', start);
-        marker.addEventListener('markerLost', hardReset);
-
-        // 初期化
-        hardReset();
-      }
-    });
-  </script>
+  const scene = document.querySelector("a-scene");
+  scene.setAttribute("arjs", `
+    sourceType: webcam;
+    debugUIEnabled: false;
+    sourceWidth: 1280;
+    sourceHeight: 720;
+    displayWidth: 1280;
+    displayHeight: 720;
+    deviceId: ${deviceId || ""}
+  `);
+});
+</script>
 </head>
 
 <body>
-  <div class="ui">
-    <b>手順：</b> カメラ許可 → 弱った水龍神マーカーを映す（①→②→③が3秒ごとにフェードします）<br>
-    <span id="status">マーカーを映してください<span class="pill">WAIT</span></span>
-  </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="precision: medium; antialias: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
-    <a-assets>
-      <img id="img1" src="step1.png" />
-      <img id="img2" src="step2.png" />
-      <img id="img3" src="step3.png" />
-    </a-assets>
+<div class="ui">
+標準レンズを使用します（SO-51A対策）
+</div>
 
-    <!-- ★弱った水龍神のカスタムマーカー -->
-    <a-marker
-      type="pattern"
-      url="https://sg-ryamaki.github.io/kawazarai-ar/pattern-marker.patt"
-      sequence-3-fade
-      smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2"
-    >
-      <!-- ここで“壁貼り”でも正面表示 -->
-      <a-entity look-at-camera position="0 1.0 1.0">
+<a-scene embedded vr-mode-ui="enabled:false"
+renderer="precision: medium; antialias: true;">
 
-        <!-- ① -->
-        <a-plane id="p1"
-          width="1.9" height="3.1"
-          material="src:#img1; transparent:true; opacity:1; side:double;">
-        </a-plane>
+<a-assets>
+<img id="img1" src="step1.png" />
+<img id="img2" src="step2.png" />
+<img id="img3" src="step3.png" />
+</a-assets>
 
-        <!-- ② -->
-        <a-plane id="p2"
-          width="1.9" height="3.1"
-          material="src:#img2; transparent:true; opacity:0; side:double;">
-        </a-plane>
+<a-marker type="pattern"
+url="https://sg-ryamaki.github.io/kawazarai-ar/pattern-marker.patt">
 
-        <!-- ③ -->
-        <a-plane id="p3"
-          width="1.9" height="3.1"
-          material="src:#img3; transparent:true; opacity:0; side:double;">
-        </a-plane>
+<a-entity position="0 1 1">
 
-      </a-entity>
-    </a-marker>
+<a-plane id="p1" width="1.9" height="3.1"
+material="src:#img1; transparent:true;"></a-plane>
 
-    <a-entity camera></a-entity>
-  </a-scene>
+<a-plane id="p2" width="1.9" height="3.1"
+material="src:#img2; transparent:true; opacity:0;"></a-plane>
+
+<a-plane id="p3" width="1.9" height="3.1"
+material="src:#img3; transparent:true; opacity:0;"></a-plane>
+
+</a-entity>
+</a-marker>
+
+<a-entity camera></a-entity>
+</a-scene>
+
 </body>
 </html>
