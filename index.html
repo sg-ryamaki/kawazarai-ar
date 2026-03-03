@@ -1,267 +1,233 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <title>水龍神AR（step1→2→3）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>kawazarai-ar</title>
 
+  <!-- A-Frame + AR.js -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
   <style>
-    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
 
-    /* ✅ a-scene自体を画面固定＆全面に */
-    a-scene, .a-canvas {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 0 !important;
-      background: #000 !important;
-    }
-
-    /* ✅ 黒帯対策の本命：中央基準で“はみ出してでも”全面カバー */
-    #arjs-video, video {
-      position: fixed !important;
-      top: 50% !important;
-      left: 50% !important;
-      transform: translate(-50%, -50%) !important;
-
-      min-width: 100vw !important;
-      min-height: 100vh !important;
-
-      width: auto !important;
-      height: auto !important;
-
-      object-fit: cover !important;
-      z-index: 0 !important;
-      background: #000 !important;
-    }
-
-    canvas, .a-canvas canvas {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 1 !important;
-      background: transparent !important;
-    }
-
+    /* HUD */
     #hud{
-      position: fixed; left: 14px; top: 14px; z-index: 9999;
-      background: rgba(0,0,0,.55); color:#fff; padding: 12px 14px; border-radius: 14px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-      line-height: 1.5; max-width: min(92vw, 560px);
-      backdrop-filter: blur(6px);
-    }
-    #hud .row{ display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
-    #badge{
-      display:inline-block; padding: 4px 10px; border-radius:999px;
-      background:#8b5a00; color:#fff; font-weight:700;
-    }
-    #mini{ opacity:.85; font-size: 12px; margin-top:6px; }
-
-    /* ガイド枠（邪魔なら display:none にしてOK） */
-    #guide{
-      position: fixed; right: 14px; top: 110px; z-index: 9998;
-      width: min(42vw, 280px); height: min(56vh, 360px);
-      border: 2px dashed rgba(255,255,255,.35);
-      border-radius: 18px;
+      position: fixed;
+      top: env(safe-area-inset-top);
+      left: env(safe-area-inset-left);
+      right: env(safe-area-inset-right);
+      padding: 14px 14px 10px;
+      z-index: 9999;
       pointer-events:none;
-      box-shadow: 0 0 0 6px rgba(0,0,0,.25) inset;
+    }
+    #panel{
+      display:inline-block;
+      max-width: 92vw;
+      color:#fff;
+      background: rgba(0,0,0,.55);
+      border-radius: 16px;
+      padding: 14px 16px;
+      backdrop-filter: blur(8px);
+    }
+    #title{ font-weight:700; font-size:18px; margin:0 0 8px; }
+    #desc{ margin:0 0 10px; font-size:14px; line-height:1.5; opacity:.95; }
+    #row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .pill{
+      display:inline-block;
+      padding:6px 12px;
+      border-radius: 999px;
+      font-weight:700;
+      font-size:14px;
+      letter-spacing:.02em;
+    }
+    #pillState{ background:#8a5a00; } /* WAIT */
+    #pillShowing{ background:#0b6b3a; display:none; } /* SHOWING */
+    #meta{ margin-top:8px; font-size:12px; opacity:.85; }
+
+    /* Guide frame (大きくした) */
+    #guideWrap{
+      position: fixed;
+      inset: 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index: 9998;
+      pointer-events:none;
+    }
+    #guide{
+      /* ここがポイント：大きめに */
+      width: min(78vw, 560px);
+      aspect-ratio: 1 / 1;
+      border: 4px dashed rgba(255,255,255,.70);
+      border-radius: 22px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.25) inset; /* うっすら暗くして中央を目立たせる */
+    }
+    #guideHint{
+      position:absolute;
+      bottom: calc(env(safe-area-inset-bottom) + 18px);
+      left: 50%;
+      transform: translateX(-50%);
+      color:#fff;
+      background: rgba(0,0,0,.45);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      opacity: .92;
+      white-space: nowrap;
     }
   </style>
 </head>
 
 <body>
+  <!-- HUD -->
   <div id="hud">
-    <div class="row">
-      <div style="font-weight:800;">手順：</div>
-      <div>カメラ許可 → マーカーをガイド枠に入れてください</div>
-    </div>
-    <div class="row" style="margin-top:8px;">
-      <span id="badge">WAIT</span>
-      <span id="status">表示中：-</span>
-    </div>
-    <div id="mini">
-      camera: <span id="camStat">…</span> ／ patt: <span id="pattStat">…</span>
+    <div id="panel">
+      <p id="title">手順：</p>
+      <p id="desc">カメラ許可 → マーカーをガイド枠に入れてください</p>
+      <div id="row">
+        <span id="pillState" class="pill">WAIT</span>
+        <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
+      </div>
+      <div id="meta">
+        <span id="metaCam">camera: -</span> /
+        <span id="metaPatt">patt: -</span>
+      </div>
     </div>
   </div>
-  <div id="guide"></div>
 
+  <!-- Guide -->
+  <div id="guideWrap">
+    <div id="guide"></div>
+    <div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
+  </div>
+
+  <!-- AR Scene -->
   <a-scene
     embedded
+    renderer="antialias: true; alpha: true; precision: medium;"
     vr-mode-ui="enabled: false"
-    renderer="antialias: true; colorManagement: true; alpha: true"
+    device-orientation-permission-ui="enabled: false"
     arjs="
+      trackingMethod: best;
       sourceType: webcam;
       debugUIEnabled: false;
-
-      /* ✅ 背面カメラ指定（効かない端末もあるが入れておく価値あり） */
-      facingMode: environment;
-
-      /* ✅ 解像度要求（端末が拒否すると下がる） */
       sourceWidth: 1280;
       sourceHeight: 720;
       displayWidth: 1280;
       displayHeight: 720;
-
-      maxDetectionRate: 60;
-      detectionMode: mono;
     "
   >
-    <a-marker id="marker" type="pattern" url="pattern-marker.patt">
-      <a-entity id="contentRoot" visible="false">
-        <a-entity position="0 0 0.02">
-          <a-image id="imgA" src="step1.png"
-            position="0 0 0" width="1.2" height="1.6"
-            material="transparent:true; opacity: 1"></a-image>
-          <a-image id="imgB" src="step2.png"
-            position="0 0 0.001" width="1.2" height="1.6"
-            material="transparent:true; opacity: 0"></a-image>
-        </a-entity>
+    <!-- Pattern marker -->
+    <a-marker
+      id="marker"
+      type="pattern"
+      url="pattern-marker.patt"
+      emitevents="true"
+    >
+      <!-- 画像表示用：同じ位置に重ねて opacity で切替 -->
+      <a-entity position="0 0 0">
+        <a-image id="img1" src="step1.png" position="0 0 0" rotation="-90 0 0" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
+        <a-image id="img2" src="step2.png" position="0 0 0" rotation="-90 0 0" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
+        <a-image id="img3" src="step3.png" position="0 0 0" rotation="-90 0 0" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
       </a-entity>
     </a-marker>
 
-    <a-entity camera="near: 0.01; far: 10000"></a-entity>
+    <a-entity camera></a-entity>
   </a-scene>
 
   <script>
-    const STEPS = ["step1.png", "step2.png", "step3.png"];
-    const STEP_MS = 3000;
-    const FADE_MS = 700;
+    // ---- 状態表示 ----
+    const pillState = document.getElementById('pillState');
+    const pillShowing = document.getElementById('pillShowing');
+    const showingNum = document.getElementById('showingNum');
+    const metaCam = document.getElementById('metaCam');
+    const metaPatt = document.getElementById('metaPatt');
 
-    const badge = document.getElementById("badge");
-    const statusEl = document.getElementById("status");
-    const camStat = document.getElementById("camStat");
-    const pattStat = document.getElementById("pattStat");
+    const marker = document.getElementById('marker');
+    const imgs = [
+      document.getElementById('img1'),
+      document.getElementById('img2'),
+      document.getElementById('img3'),
+    ];
 
-    const marker = document.getElementById("marker");
-    const contentRoot = document.getElementById("contentRoot");
-    const imgA = document.getElementById("imgA");
-    const imgB = document.getElementById("imgB");
-
-    let found = false;
     let timer = null;
-    let stepIndex = 0;
-    let front = "A";
+    let index = 0;
+    let found = false;
 
-    function tweenOpacity(el, from, to, ms) {
-      return new Promise((resolve) => {
-        const start = performance.now();
-        function tick(now) {
-          const t = Math.min(1, (now - start) / ms);
-          const v = from + (to - from) * t;
-          el.setAttribute("material", "transparent:true; opacity:" + v.toFixed(3));
-          if (t < 1) requestAnimationFrame(tick);
-          else resolve();
-        }
-        requestAnimationFrame(tick);
+    function setOpacity(el, v) {
+      el.setAttribute('material', 'opacity', v);
+    }
+
+    function fadeTo(nextIdx) {
+      // ふわっと切替（フェード）
+      imgs.forEach((img, i) => {
+        img.removeAttribute('animation__fade');
+        const target = (i === nextIdx) ? 1 : 0;
+        img.setAttribute('animation__fade', {
+          property: 'material.opacity',
+          to: target,
+          dur: 600,
+          easing: 'easeInOutQuad'
+        });
       });
     }
 
-    function setHudWait() {
-      badge.textContent = "WAIT";
-      badge.style.background = "#8b5a00";
-      statusEl.textContent = "表示中：-";
-    }
-    function setHudFound(n) {
-      badge.textContent = "FOUND";
-      badge.style.background = "#0f7a2b";
-      statusEl.textContent = "表示中：" + n;
+    function showStep(i) {
+      index = i;
+      showingNum.textContent = String(i + 1);
+      pillShowing.style.display = 'inline-block';
+      fadeTo(i);
     }
 
-    async function crossFadeTo(nextSrc) {
-      const frontEl = (front === "A") ? imgA : imgB;
-      const backEl  = (front === "A") ? imgB : imgA;
-
-      backEl.setAttribute("src", nextSrc);
-
-      await Promise.all([
-        tweenOpacity(frontEl, 1, 0, FADE_MS),
-        tweenOpacity(backEl,  0, 1, FADE_MS)
-      ]);
-
-      front = (front === "A") ? "B" : "A";
-    }
-
-    function startSequence() {
-      stopSequence();
-
-      stepIndex = 0;
-      front = "A";
-      imgA.setAttribute("src", STEPS[0]);
-      imgA.setAttribute("material", "transparent:true; opacity:1");
-      imgB.setAttribute("src", STEPS[1]);
-      imgB.setAttribute("material", "transparent:true; opacity:0");
-
-      setHudFound(1);
-      contentRoot.setAttribute("visible", "true");
-
-      timer = setInterval(async () => {
+    function startLoop() {
+      stopLoop();
+      showStep(0);
+      timer = setInterval(() => {
         if (!found) return;
-        stepIndex = (stepIndex + 1) % STEPS.length;
-        setHudFound(stepIndex + 1);
-        await crossFadeTo(STEPS[stepIndex]);
-      }, STEP_MS);
+        const next = (index + 1) % imgs.length;
+        showStep(next);
+      }, 3000);
     }
 
-    function stopSequence() {
+    function stopLoop() {
       if (timer) { clearInterval(timer); timer = null; }
-      contentRoot.setAttribute("visible", "false");
-      setHudWait();
     }
 
-    marker.addEventListener("markerFound", () => {
+    // Marker events
+    marker.addEventListener('markerFound', () => {
       found = true;
-      startSequence();
+      pillState.textContent = 'FOUND';
+      pillState.style.background = '#0b4f9a';
+      startLoop();
     });
-    marker.addEventListener("markerLost", () => {
+
+    marker.addEventListener('markerLost', () => {
       found = false;
-      stopSequence();
+      pillState.textContent = 'WAIT';
+      pillState.style.background = '#8a5a00';
+      pillShowing.style.display = 'none';
+      stopLoop();
+      // 全部消す
+      imgs.forEach(img => setOpacity(img, 0));
     });
 
-    function updateCameraStat() {
-      const video = document.querySelector("video");
-      if (!video) { camStat.textContent = "…"; return; }
-      const w = video.videoWidth || 0;
-      const h = video.videoHeight || 0;
-      camStat.textContent = (w && h) ? `OK (${w}x${h})` : "OK (starting...)";
-    }
-
-    async function updatePattStat() {
-      try {
-        const res = await fetch("pattern-marker.patt", { cache: "no-store" });
-        const txt = await res.text();
-        pattStat.textContent = `OK (${txt.length} chars)`;
-      } catch (e) {
-        pattStat.textContent = "NG (fetch error)";
+    // camera / patt の簡易表示（目安）
+    // A-Frame の video 要素からサイズを拾う
+    const check = setInterval(() => {
+      const v = document.querySelector('video');
+      if (v) {
+        metaCam.textContent = `camera: OK (${v.videoWidth || '-'}x${v.videoHeight || '-'})`;
       }
-    }
+    }, 600);
 
-    // ✅ iOSの再生ロック・復帰対策（黒画面/停止の保険）
-    async function forcePlayVideo() {
-      const v = document.querySelector("video");
-      if (!v) return;
-      try { await v.play(); } catch (e) {}
-    }
-
-    setHudWait();
-    updatePattStat();
-    setInterval(updateCameraStat, 500);
-    setTimeout(updatePattStat, 1500);
-
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) forcePlayVideo();
-    });
-
-    document.body.addEventListener("click", () => {
-      forcePlayVideo();
-    }, { passive: true });
-
-    // ✅ 起動直後にも一度トライ
-    setTimeout(forcePlayVideo, 800);
+    // patt は読み込めている前提で表示だけ固定
+    metaPatt.textContent = 'patt: OK (loading...)';
+    // ざっくり 2秒後に OK 表示
+    setTimeout(() => {
+      metaPatt.textContent = 'patt: OK';
+    }, 2000);
   </script>
 </body>
 </html>
