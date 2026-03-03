@@ -1,197 +1,173 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>水龍神AR（Android/iPhone安定版）</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>水龍神AR 完全安定版</title>
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
-  <style>
-    body{ margin:0; overflow:hidden; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:#000; }
-    .ui{
-      position:fixed; left:12px; right:12px; top:12px;
-      background:rgba(0,0,0,.60); color:#fff; padding:10px 12px;
-      border-radius:12px; z-index:10; line-height:1.45;
-      backdrop-filter: blur(6px);
-    }
-    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .pill{ display:inline-block; padding:2px 10px; border-radius:999px; background:rgba(255,255,255,.15); }
-    .ok{ background:rgba(80,200,120,.25); }
-    .wait{ background:rgba(255,255,255,.15); }
-    .ng{ background:rgba(255,80,80,.25); }
-  </style>
+<style>
+body{margin:0;overflow:hidden;background:#000;font-family:sans-serif;}
+.ui{
+position:fixed;left:12px;right:12px;top:12px;
+background:rgba(0,0,0,.6);color:#fff;
+padding:10px;border-radius:12px;
+z-index:10;backdrop-filter:blur(6px);
+}
+.pill{padding:2px 10px;border-radius:999px;background:rgba(255,255,255,.2);}
+.ok{background:rgba(0,200,120,.4);}
+.wait{background:rgba(255,255,255,.2);}
+.ng{background:rgba(255,80,80,.4);}
+</style>
 
-  <script>
-    // カメラへ常に正面を向ける（壁マーカー向け）
-    AFRAME.registerComponent('look-at-camera', {
-      tick: function () {
-        const cam = document.querySelector('[camera]');
-        if (!cam) return;
-        this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
-      }
-    });
+<script>
+AFRAME.registerComponent('look-at-camera',{
+  tick:function(){
+    const cam=document.querySelector('[camera]');
+    if(!cam)return;
+    this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
+  }
+});
 
-    // 画像ロード完了を待つ
-    function waitImg(id, timeoutMs = 15000){
-      return new Promise((resolve, reject) => {
-        const img = document.getElementById(id);
-        if (!img) return reject(new Error(`img #${id} not found`));
-        if (img.complete && img.naturalWidth > 0) return resolve(true);
+function waitImg(id){
+  return new Promise((resolve,reject)=>{
+    const img=document.getElementById(id);
+    if(img.complete && img.naturalWidth>0) return resolve();
+    img.onload=()=>resolve();
+    img.onerror=()=>reject();
+  });
+}
 
-        const t = setTimeout(() => reject(new Error(`timeout ${id}`)), timeoutMs);
-        img.addEventListener('load', () => { clearTimeout(t); resolve(true); }, { once:true });
-        img.addEventListener('error', () => { clearTimeout(t); reject(new Error(`error ${id}`)); }, { once:true });
+AFRAME.registerComponent('sequence-3-fade',{
+  init:function(){
+    this.running=false;
+    this.ready=false;
+    this.timers=[];
+    this.p1=document.querySelector('#p1');
+    this.p2=document.querySelector('#p2');
+    this.p3=document.querySelector('#p3');
+    this.status=document.getElementById('status');
+    this.step=document.getElementById('step');
+    const marker=this.el;
+
+    const setStatus=(html)=>this.status.innerHTML=html;
+    const setStep=(html)=>this.step.innerHTML=html;
+    const clearTimers=()=>this.timers.forEach(t=>clearTimeout(t));
+
+    const hideAll=()=>{
+      this.p1.setAttribute('material','opacity',0);
+      this.p2.setAttribute('material','opacity',0);
+      this.p3.setAttribute('material','opacity',0);
+    };
+
+    const showOnly=(n)=>{
+      this.p1.setAttribute('material','opacity',n===1?1:0);
+      this.p2.setAttribute('material','opacity',n===2?1:0);
+      this.p3.setAttribute('material','opacity',n===3?1:0);
+      setStep("表示："+n+" <span class='pill ok'>OK</span>");
+    };
+
+    const fadeTo=(from,to,n)=>{
+      from.setAttribute('animation__fadeout',{
+        property:'material.opacity',from:1,to:0,dur:700
       });
-    }
+      to.setAttribute('animation__fadein',{
+        property:'material.opacity',from:0,to:1,dur:1000
+      });
+      setStep("表示："+n+" <span class='pill ok'>OK</span>");
+    };
 
-    // ①→②→③（3秒ごと）フェード切替：FOUND時に「画像が全部ロード済み」なら開始
-    AFRAME.registerComponent('sequence-3-fade', {
-      init: function () {
-        this.running = false;
-        this.ready = false;
-        this.timers = [];
-
-        this.p1 = document.querySelector('#p1');
-        this.p2 = document.querySelector('#p2');
-        this.p3 = document.querySelector('#p3');
-
-        this.statusEl = document.getElementById('status');
-        this.stepEl = document.getElementById('step');
-
-        const marker = this.el;
-
-        const setStatus = (html) => { if (this.statusEl) this.statusEl.innerHTML = html; };
-        const setStep = (html) => { if (this.stepEl) this.stepEl.innerHTML = html; };
-
-        const clearTimers = () => { this.timers.forEach(id => clearTimeout(id)); this.timers = []; };
-
-        const hideAll = () => {
-          this.p1.setAttribute('material', 'opacity', 0);
-          this.p2.setAttribute('material', 'opacity', 0);
-          this.p3.setAttribute('material', 'opacity', 0);
-        };
-
-        const showOnly = (n) => {
-          this.p1.setAttribute('material', 'opacity', n === 1 ? 1 : 0);
-          this.p2.setAttribute('material', 'opacity', n === 2 ? 1 : 0);
-          this.p3.setAttribute('material', 'opacity', n === 3 ? 1 : 0);
-          setStep(`表示：${n} <span class="pill ok">OK</span>`);
-        };
-
-        const fadeTo = (fromEl, toEl, n) => {
-          fromEl.setAttribute('animation__fadeout', {
-            property:'material.opacity', from:1, to:0, dur:650, easing:'easeOutQuad'
-          });
-          toEl.setAttribute('animation__fadein', {
-            property:'material.opacity', from:0, to:1, dur:950, easing:'easeOutCubic'
-          });
-          setStep(`表示：${n} <span class="pill ok">OK</span>`);
-        };
-
-        const reset = () => {
-          clearTimers();
-          this.running = false;
-          setStatus(`マーカーを映してください <span class="pill wait">WAIT</span>`);
-          setStep('');
-          hideAll();
-        };
-
-        // 最初はWAIT
-        reset();
-
-        // 画像ロード（ページ起動時に先読み）
-        (async () => {
-          try{
-            setStatus(`画像を読み込み中… <span class="pill wait">LOADING</span>`);
-            await Promise.all([waitImg('img1'), waitImg('img2'), waitImg('img3')]);
-            this.ready = true;
-            setStatus(`準備完了：マーカーを映してください <span class="pill wait">WAIT</span>`);
-          }catch(e){
-            this.ready = false;
-            setStatus(`画像ロード失敗 <span class="pill ng">NG</span>（step1/2/3.png を確認）`);
-            console.error(e);
-          }
-        })();
-
-        const start = () => {
-          if (this.running) return;
-
-          if (!this.ready){
-            // 画像未ロードなら開始しない（Androidで透明になる事故防止）
-            setStatus(`マーカー検出 <span class="pill ok">FOUND</span> / 画像準備中…`);
-            return;
-          }
-
-          this.running = true;
-          setStatus(`マーカー検出 <span class="pill ok">FOUND</span>`);
-          showOnly(1);
-
-          this.timers.push(setTimeout(() => fadeTo(this.p1, this.p2, 2), 3000));
-          this.timers.push(setTimeout(() => fadeTo(this.p2, this.p3, 3), 6000));
-        };
-
-        marker.addEventListener('markerFound', start);
-        marker.addEventListener('markerLost', reset);
+    (async()=>{
+      try{
+        setStatus("画像読込中 <span class='pill wait'>LOADING</span>");
+        await Promise.all([waitImg('img1'),waitImg('img2'),waitImg('img3')]);
+        this.ready=true;
+        setStatus("マーカーを映してください <span class='pill wait'>WAIT</span>");
+      }catch{
+        setStatus("画像ロード失敗 <span class='pill ng'>NG</span>");
       }
+    })();
+
+    marker.addEventListener('markerFound',()=>{
+      if(!this.ready)return;
+      if(this.running)return;
+      this.running=true;
+      setStatus("マーカー検出 <span class='pill ok'>FOUND</span>");
+      showOnly(1);
+      this.timers.push(setTimeout(()=>fadeTo(this.p1,this.p2,2),3000));
+      this.timers.push(setTimeout(()=>fadeTo(this.p2,this.p3,3),6000));
     });
-  </script>
+
+    marker.addEventListener('markerLost',()=>{
+      clearTimers();
+      this.running=false;
+      hideAll();
+      setStep("");
+      setStatus("マーカーを映してください <span class='pill wait'>WAIT</span>");
+    });
+  }
+});
+</script>
 </head>
 
 <body>
-  <div class="ui">
-    <div class="row">
-      <b>手順：</b> カメラ許可 → 弱った水龍神マーカーを映す
-      <span id="status">準備中…</span>
-      <span id="step"></span>
-    </div>
-  </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="precision: medium; antialias: true;"
-    arjs="
-      sourceType: webcam;
-      debugUIEnabled: false;
-      sourceWidth: 1280;
-      sourceHeight: 720;
-      displayWidth: 1280;
-      displayHeight: 720;
-    "
-  >
-    <!-- Androidでのロードを安定させる（timeout長め） -->
-    <a-assets timeout="20000">
-      <img id="img1" src="step1.png" crossorigin="anonymous" />
-      <img id="img2" src="step2.png" crossorigin="anonymous" />
-      <img id="img3" src="step3.png" crossorigin="anonymous" />
-    </a-assets>
+<div class="ui">
+手順：カメラ許可 → マーカーを映す　
+<span id="status"></span>　
+<span id="step"></span>
+</div>
 
-    <a-marker
-      type="pattern"
-      url="pattern-marker.patt"
-      emitevents="true"
-      sequence-3-fade
-      smooth="true" smoothCount="7" smoothTolerance="0.01" smoothThreshold="2"
-    >
-      <!-- 見えやすい位置：少し手前＋常に正面 -->
-      <a-entity look-at-camera position="0 0 0.7" scale="1 1 1">
+<a-scene
+embedded
+vr-mode-ui="enabled:false"
+renderer="precision:medium;antialias:true;"
+arjs="
+sourceType:webcam;
+trackingMethod:best;
+debugUIEnabled:false;
+sourceWidth:1280;
+sourceHeight:720;
+">
 
-        <!-- shader: flat を付けて「真っ黒/見えない」問題を回避 -->
-        <a-plane id="p1" position="0 0 0.000" width="1.1" height="1.95"
-          material="shader: flat; src:#img1; transparent:true; opacity:0; side:double; alphaTest:0.01;"></a-plane>
+<a-assets timeout="20000">
+<img id="img1" src="step1.png">
+<img id="img2" src="step2.png">
+<img id="img3" src="step3.png">
+</a-assets>
 
-        <a-plane id="p2" position="0 0 0.002" width="1.1" height="1.95"
-          material="shader: flat; src:#img2; transparent:true; opacity:0; side:double; alphaTest:0.01;"></a-plane>
+<a-marker
+type="pattern"
+url="pattern-marker.patt"
+emitevents="true"
+smooth="true"
+smoothCount="10"
+smoothTolerance="0.01"
+smoothThreshold="5"
+sequence-3-fade
+>
 
-        <a-plane id="p3" position="0 0 0.004" width="1.1" height="1.95"
-          material="shader: flat; src:#img3; transparent:true; opacity:0; side:double; alphaTest:0.01;"></a-plane>
+<a-entity look-at-camera position="0 0 0.7" scale="1 1 1">
 
-      </a-entity>
-    </a-marker>
+<a-plane id="p1" position="0 0 0.000" width="1.1" height="1.95"
+material="shader:flat;src:#img1;transparent:true;opacity:0;side:double;">
+</a-plane>
 
-    <a-entity camera></a-entity>
-  </a-scene>
+<a-plane id="p2" position="0 0 0.002" width="1.1" height="1.95"
+material="shader:flat;src:#img2;transparent:true;opacity:0;side:double;">
+</a-plane>
+
+<a-plane id="p3" position="0 0 0.004" width="1.1" height="1.95"
+material="shader:flat;src:#img3;transparent:true;opacity:0;side:double;">
+</a-plane>
+
+</a-entity>
+</a-marker>
+
+<a-entity camera></a-entity>
+</a-scene>
+
 </body>
 </html>
