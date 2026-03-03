@@ -1,218 +1,169 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>水龍神AR</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>水龍神AR</title>
 
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- AR.js（★タグ固定：これが黒画面対策で効くことが多い） -->
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 
-  <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+<style>
+html, body {
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+}
 
-    /* ★重要：a-scene を強制フルスクリーン（黒画面対策の本丸） */
-    a-scene {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      z-index: 1;
-    }
-    /* AR.js が作る video/canvas を確実に全面表示 */
-    video, canvas {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover !important;
-    }
+/* AR.jsが生成するvideoを最背面に強制 */
+#arjs-video {
+  position: fixed !important;
+  top:0; left:0;
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  z-index:0 !important;
+  display:block !important;
+  opacity:1 !important;
+}
 
-    /* HUD */
-    .hud {
-      position: fixed;
-      left: 12px; right: 12px; top: 12px;
-      padding: 14px 14px;
-      border-radius: 14px;
-      color: #fff;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(6px);
-      font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-      z-index: 9999;
-      line-height: 1.35;
-    }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .badge { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.12); font-size: 13px; }
-    .ok { background: rgba(0,200,120,0.25); }
-    .wait { background: rgba(255,160,0,0.25); }
-    .ng { background: rgba(255,0,0,0.25); }
-    .small { opacity: .9; font-size: 13px; margin-top: 6px; }
-  </style>
+/* A-Frame描画canvasは透明＋videoの上に */
+canvas.a-canvas,
+#arjs-canvas {
+  position: fixed !important;
+  top:0; left:0;
+  width:100% !important;
+  height:100% !important;
+  background:transparent !important;
+  z-index:1 !important;
+}
+
+/* scene自体も透明 */
+a-scene {
+  position: fixed !important;
+  inset: 0 !important;
+  width:100% !important;
+  height:100% !important;
+  background:transparent !important;
+  z-index:1 !important;
+}
+
+/* HUD */
+.hud{
+  position: fixed;
+  top:12px;
+  left:12px;
+  right:12px;
+  z-index:9999;
+  color:#fff;
+  background:rgba(0,0,0,0.55);
+  padding:14px;
+  border-radius:14px;
+  font-family:-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
+}
+.badge{
+  display:inline-block;
+  padding:6px 12px;
+  border-radius:999px;
+  background:rgba(255,160,0,0.3);
+  margin-top:6px;
+}
+</style>
 </head>
 
 <body>
-  <div class="hud">
-    <div class="row">
-      <div><strong>手順：</strong>カメラ許可 → 壁の「水龍神マーカー」を映してください</div>
-      <div id="status" class="badge wait">WAIT</div>
-    </div>
-    <div class="small">
-      表示中：<span id="step">-</span>　
-      <span id="cam">camera: …</span>
-    </div>
-  </div>
 
-  <a-scene
-    vr-mode-ui="enabled: false"
-    renderer="antialias: true; alpha: true; precision: medium;"
-    arjs="
-      sourceType: webcam;
-      debugUIEnabled: false;
-      trackingMethod: best;
-    "
-  >
-    <a-assets>
-      <!-- キャッシュ対策：更新時に v を変える -->
-      <img id="img1" src="./step1.png?v=20260303-9" crossorigin="anonymous">
-      <img id="img2" src="./step2.png?v=20260303-9" crossorigin="anonymous">
-      <img id="img3" src="./step3.png?v=20260303-9" crossorigin="anonymous">
-    </a-assets>
+<div class="hud">
+<strong>手順：</strong>カメラ許可 → 壁の「水龍神マーカー」を映してください<br>
+<div id="status" class="badge">WAIT</div>
+<div style="font-size:13px;margin-top:6px;">
+camera: <span id="cam">...</span>
+</div>
+</div>
 
-    <a-marker
-      id="marker"
-      type="pattern"
-      url="./pattern-marker.patt?v=20260303-9"
-    >
-      <a-entity id="contentRoot" position="0 0 0" rotation="0 0 0">
-        <a-image id="step1" src="#img1" position="0 0 0.01" width="1.2" height="1.2"
-          material="transparent:true; opacity:0; side:double;"
-          animation__fadein="property: material.opacity; to: 1; dur: 900; startEvents: show"
-          animation__fadeout="property: material.opacity; to: 0; dur: 900; startEvents: hide"
-        ></a-image>
+<a-scene
+embedded
+vr-mode-ui="enabled:false"
+renderer="antialias:true; alpha:true;"
+arjs="sourceType:webcam; debugUIEnabled:false; trackingMethod:best;"
+>
 
-        <a-image id="step2" src="#img2" position="0 0 0.011" width="1.2" height="1.2"
-          material="transparent:true; opacity:0; side:double;"
-          animation__fadein="property: material.opacity; to: 1; dur: 900; startEvents: show"
-          animation__fadeout="property: material.opacity; to: 0; dur: 900; startEvents: hide"
-        ></a-image>
+<a-assets>
+<img id="img1" src="./step1.png?v=12">
+<img id="img2" src="./step2.png?v=12">
+<img id="img3" src="./step3.png?v=12">
+</a-assets>
 
-        <a-image id="step3" src="#img3" position="0 0 0.012" width="1.2" height="1.2"
-          material="transparent:true; opacity:0; side:double;"
-          animation__fadein="property: material.opacity; to: 1; dur: 900; startEvents: show"
-          animation__fadeout="property: material.opacity; to: 0; dur: 900; startEvents: hide"
-        ></a-image>
-      </a-entity>
-    </a-marker>
+<a-marker type="pattern" url="./pattern-marker.patt?v=12" id="marker">
 
-    <a-entity camera></a-entity>
-  </a-scene>
+<a-image id="s1" src="#img1" position="0 0 0.01" width="1.2" height="1.2"
+material="transparent:true; opacity:0;"></a-image>
 
-  <script>
-    (function () {
-      const marker = document.getElementById('marker');
-      const statusEl = document.getElementById('status');
-      const stepEl = document.getElementById('step');
-      const camEl = document.getElementById('cam');
+<a-image id="s2" src="#img2" position="0 0 0.02" width="1.2" height="1.2"
+material="transparent:true; opacity:0;"></a-image>
 
-      const s1 = document.getElementById('step1');
-      const s2 = document.getElementById('step2');
-      const s3 = document.getElementById('step3');
-      const STEPS = [s1, s2, s3];
+<a-image id="s3" src="#img3" position="0 0 0.03" width="1.2" height="1.2"
+material="transparent:true; opacity:0;"></a-image>
 
-      let timer = null;
-      let running = false;
-      let index = 0;
+</a-marker>
 
-      function setStatus(type, text) {
-        statusEl.textContent = text;
-        statusEl.classList.remove('ok','wait','ng');
-        statusEl.classList.add(type);
-      }
+<a-entity camera></a-entity>
+</a-scene>
 
-      function hideAllImmediately() {
-        STEPS.forEach(el => el.setAttribute('material', 'opacity', 0));
-      }
+<script>
+const marker = document.getElementById("marker");
+const statusEl = document.getElementById("status");
+const camEl = document.getElementById("cam");
 
-      function fadeTo(i) {
-        STEPS.forEach((el, idx) => {
-          if (idx === i) el.emit('show');
-          else el.emit('hide');
-        });
-        stepEl.textContent = String(i + 1);
-      }
+const steps = [
+  document.getElementById("s1"),
+  document.getElementById("s2"),
+  document.getElementById("s3")
+];
 
-      function startSequence() {
-        if (running) return;
-        running = true;
-        index = 0;
-        hideAllImmediately();
-        fadeTo(index);
+let index = 0;
+let timer = null;
 
-        timer = setInterval(() => {
-          index++;
-          if (index >= STEPS.length) {
-            clearInterval(timer);
-            timer = null;
-            return;
-          }
-          fadeTo(index);
-        }, 3000);
-      }
+function hideAll(){
+  steps.forEach(s => s.setAttribute("material","opacity",0));
+}
 
-      function stopSequence() {
-        running = false;
-        if (timer) { clearInterval(timer); timer = null; }
-        stepEl.textContent = '-';
-        hideAllImmediately();
-      }
+function showStep(i){
+  hideAll();
+  steps[i].setAttribute("material","opacity",1);
+}
 
-      marker.addEventListener('markerFound', () => {
-        setStatus('ok', 'FOUND');
-        startSequence();
-      });
+marker.addEventListener("markerFound",()=>{
+  statusEl.textContent="FOUND";
+  index=0;
+  showStep(index);
+  timer=setInterval(()=>{
+    index++;
+    if(index>=steps.length){ clearInterval(timer); return; }
+    showStep(index);
+  },3000);
+});
 
-      marker.addEventListener('markerLost', () => {
-        setStatus('wait', 'WAIT');
-        stopSequence();
-      });
+marker.addEventListener("markerLost",()=>{
+  statusEl.textContent="WAIT";
+  hideAll();
+  clearInterval(timer);
+});
 
-      // ---- カメラ起動チェック（黒画面の切り分け） ----
-      function checkCamera() {
-        const v = document.querySelector('video');
-        if (!v) {
-          camEl.textContent = 'camera: video未生成';
-          return false;
-        }
-        const ok = (v.readyState >= 2) && (v.videoWidth > 0) && (v.videoHeight > 0);
-        camEl.textContent = ok
-          ? `camera: OK (${v.videoWidth}x${v.videoHeight})`
-          : `camera: loading... (readyState=${v.readyState})`;
-        return ok;
-      }
+function checkCamera(){
+  const v=document.querySelector("#arjs-video");
+  if(v && v.videoWidth>0){
+    camEl.textContent=`OK (${v.videoWidth}x${v.videoHeight})`;
+  }else{
+    camEl.textContent="loading...";
+  }
+}
+setInterval(checkCamera,800);
+</script>
 
-      // 1秒ごとに10回チェック→ダメならNG表示
-      let tries = 0;
-      const iv = setInterval(() => {
-        tries++;
-        const ok = checkCamera();
-        if (ok) {
-          clearInterval(iv);
-        } else if (tries >= 10) {
-          clearInterval(iv);
-          setStatus('ng', 'CAMERA NG');
-          // ここでユーザーが気づけるように表示だけ出す（Safariはアラートが邪魔になりがち）
-          camEl.textContent = 'camera: 取得失敗。別タブのカメラ使用/再読み込みを確認';
-        }
-      }, 1000);
-
-      // 初期
-      setStatus('wait', 'WAIT');
-      hideAllImmediately();
-      checkCamera();
-    })();
-  </script>
 </body>
 </html>
