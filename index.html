@@ -10,137 +10,86 @@
 <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 
 <style>
-html, body {
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#000;
+html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+
+#arjs-video{
+  position:fixed !important; top:0; left:0;
+  width:100% !important; height:100% !important;
+  object-fit:cover !important; z-index:0 !important;
 }
 
-/* AR.jsが生成するvideoを最背面に強制 */
-#arjs-video {
-  position: fixed !important;
-  top:0; left:0;
-  width:100% !important;
-  height:100% !important;
-  object-fit:cover !important;
-  z-index:0 !important;
-  display:block !important;
-  opacity:1 !important;
+canvas.a-canvas, #arjs-canvas{
+  position:fixed !important; top:0; left:0;
+  width:100% !important; height:100% !important;
+  background:transparent !important; z-index:1 !important;
 }
 
-/* A-Frame描画canvasは透明＋videoの上に */
-canvas.a-canvas,
-#arjs-canvas {
-  position: fixed !important;
-  top:0; left:0;
-  width:100% !important;
-  height:100% !important;
-  background:transparent !important;
-  z-index:1 !important;
-}
+a-scene{ position:fixed !important; inset:0 !important; background:transparent !important; z-index:1 !important; }
 
-/* scene自体も透明 */
-a-scene {
-  position: fixed !important;
-  inset: 0 !important;
-  width:100% !important;
-  height:100% !important;
-  background:transparent !important;
-  z-index:1 !important;
-}
-
-/* HUD */
 .hud{
-  position: fixed;
-  top:12px;
-  left:12px;
-  right:12px;
-  z-index:9999;
-  color:#fff;
-  background:rgba(0,0,0,0.55);
-  padding:14px;
-  border-radius:14px;
+  position:fixed; top:12px; left:12px; right:12px; z-index:9999;
+  color:#fff; background:rgba(0,0,0,.55); padding:14px; border-radius:14px;
   font-family:-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
 }
-.badge{
-  display:inline-block;
-  padding:6px 12px;
-  border-radius:999px;
-  background:rgba(255,160,0,0.3);
-  margin-top:6px;
-}
+.badge{ display:inline-block; padding:6px 12px; border-radius:999px; background:rgba(255,160,0,.30); margin-top:6px; }
+.ok{ background:rgba(0,180,120,.35) !important; }
+.ng{ background:rgba(220,40,60,.45) !important; }
+.small{ font-size:13px; margin-top:6px; opacity:.95; }
 </style>
 </head>
 
 <body>
-
 <div class="hud">
-<strong>手順：</strong>カメラ許可 → 壁の「水龍神マーカー」を映してください<br>
-<div id="status" class="badge">WAIT</div>
-<div style="font-size:13px;margin-top:6px;">
-camera: <span id="cam">...</span>
-</div>
+  <strong>手順：</strong>カメラ許可 → 壁の「水龍神マーカー」を映してください<br>
+  <div id="status" class="badge">WAIT</div>
+  <div class="small">
+    camera: <span id="cam">...</span><br>
+    patt: <span id="patt">checking...</span>
+  </div>
 </div>
 
 <a-scene
-embedded
-vr-mode-ui="enabled:false"
-renderer="antialias:true; alpha:true;"
-arjs="sourceType:webcam; debugUIEnabled:false; trackingMethod:best;"
+  embedded
+  vr-mode-ui="enabled:false"
+  renderer="antialias:true; alpha:true;"
+  arjs="sourceType:webcam; debugUIEnabled:false; trackingMethod:best;"
 >
+  <a-assets>
+    <img id="img1" src="./step1.png?v=999">
+    <img id="img2" src="./step2.png?v=999">
+    <img id="img3" src="./step3.png?v=999">
+  </a-assets>
 
-<a-assets>
-<img id="img1" src="./step1.png?v=12">
-<img id="img2" src="./step2.png?v=12">
-<img id="img3" src="./step3.png?v=12">
-</a-assets>
+  <!-- ★ここが最重要：pattern-marker.patt は “いま印刷してる marker.png から作ったもの” である必要あり -->
+  <a-marker type="pattern" url="./pattern-marker.patt?v=999" id="marker">
+    <a-image id="s1" src="#img1" position="0 0 0.01" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
+    <a-image id="s2" src="#img2" position="0 0 0.02" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
+    <a-image id="s3" src="#img3" position="0 0 0.03" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
+  </a-marker>
 
-<a-marker type="pattern" url="./pattern-marker.patt?v=12" id="marker">
-
-<a-image id="s1" src="#img1" position="0 0 0.01" width="1.2" height="1.2"
-material="transparent:true; opacity:0;"></a-image>
-
-<a-image id="s2" src="#img2" position="0 0 0.02" width="1.2" height="1.2"
-material="transparent:true; opacity:0;"></a-image>
-
-<a-image id="s3" src="#img3" position="0 0 0.03" width="1.2" height="1.2"
-material="transparent:true; opacity:0;"></a-image>
-
-</a-marker>
-
-<a-entity camera></a-entity>
+  <a-entity camera></a-entity>
 </a-scene>
 
 <script>
 const marker = document.getElementById("marker");
 const statusEl = document.getElementById("status");
 const camEl = document.getElementById("cam");
+const pattEl = document.getElementById("patt");
 
-const steps = [
-  document.getElementById("s1"),
-  document.getElementById("s2"),
-  document.getElementById("s3")
-];
-
+const steps = [document.getElementById("s1"), document.getElementById("s2"), document.getElementById("s3")];
 let index = 0;
 let timer = null;
 
-function hideAll(){
-  steps.forEach(s => s.setAttribute("material","opacity",0));
-}
-
-function showStep(i){
-  hideAll();
-  steps[i].setAttribute("material","opacity",1);
-}
+function hideAll(){ steps.forEach(s => s.setAttribute("material","opacity",0)); }
+function showStep(i){ hideAll(); steps[i].setAttribute("material","opacity",1); }
 
 marker.addEventListener("markerFound",()=>{
   statusEl.textContent="FOUND";
+  statusEl.classList.add("ok");
+  statusEl.classList.remove("ng");
   index=0;
   showStep(index);
+  clearInterval(timer);
   timer=setInterval(()=>{
     index++;
     if(index>=steps.length){ clearInterval(timer); return; }
@@ -150,6 +99,7 @@ marker.addEventListener("markerFound",()=>{
 
 marker.addEventListener("markerLost",()=>{
   statusEl.textContent="WAIT";
+  statusEl.classList.remove("ok","ng");
   hideAll();
   clearInterval(timer);
 });
@@ -163,6 +113,34 @@ function checkCamera(){
   }
 }
 setInterval(checkCamera,800);
+
+// ★ patt が読み込めているかを事前にチェック（404ならここで確定）
+(async ()=>{
+  try{
+    const res = await fetch("./pattern-marker.patt?v=999", { cache:"no-store" });
+    if(!res.ok){
+      pattEl.textContent = `NG (HTTP ${res.status})`;
+      pattEl.className = "ng";
+      statusEl.textContent="PATT ERROR";
+      statusEl.classList.add("ng");
+      return;
+    }
+    const txt = await res.text();
+    if(txt.length < 1000){
+      pattEl.textContent = `NG (too short: ${txt.length})`;
+      pattEl.className = "ng";
+      statusEl.textContent="PATT ERROR";
+      statusEl.classList.add("ng");
+      return;
+    }
+    pattEl.textContent = `OK (${txt.length} chars)`;
+  }catch(e){
+    pattEl.textContent = `NG (fetch failed)`;
+    pattEl.className = "ng";
+    statusEl.textContent="PATT ERROR";
+    statusEl.classList.add("ng");
+  }
+})();
 </script>
 
 </body>
