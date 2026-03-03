@@ -1,211 +1,125 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>水龍神AR（確定版）</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>kawazarai-ar</title>
 
-  <!-- A-Frame / AR.js -->
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <style>
-    body { margin:0; overflow:hidden; background:#000; font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
-    .ui {
-      position: fixed; left: 12px; right: 12px; top: 12px;
-      padding: 12px 14px; border-radius: 14px;
-      background: rgba(0,0,0,0.60);
-      color: #fff; z-index: 9999;
-      backdrop-filter: blur(6px);
-      line-height: 1.45;
-    }
-    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px; }
-    .pill {
-      display:inline-block; padding: 2px 10px; border-radius: 999px;
-      background: rgba(255,255,255,0.18);
-      font-size: 13px;
-    }
-    .ok { background: rgba(0,200,120,0.35); }
-    .wait { background: rgba(255,255,255,0.18); }
-    .ng { background: rgba(255,80,80,0.35); }
-  </style>
+    <!-- AR.js (Pattern Marker / A-Frame build) -->
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 
-  <script>
-    // ★ここだけ更新のたびに数字を変える（キャッシュ対策）
-    const CACHE_BUSTER = "4001";
-
-    function waitImg(id){
-      return new Promise((resolve, reject) => {
-        const img = document.getElementById(id);
-        if (!img) return reject(new Error("img not found: " + id));
-        if (img.complete && img.naturalWidth > 0) return resolve();
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("img load error: " + id));
-      });
-    }
-
-    AFRAME.registerComponent('look-at-camera', {
-      tick: function () {
-        const cam = document.querySelector('[camera]');
-        if (!cam) return;
-        this.el.object3D.lookAt(cam.object3D.getWorldPosition(new THREE.Vector3()));
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        height: 100%;
+        background: #000;
       }
-    });
-
-    AFRAME.registerComponent('sequence-3-fade', {
-      init: function () {
-        this.ready = false;
-        this.running = false;
-        this.timers = [];
-
-        const marker = this.el;
-        const statusEl = document.getElementById('status');
-        const stepEl = document.getElementById('step');
-
-        const p1 = document.getElementById('p1');
-        const p2 = document.getElementById('p2');
-        const p3 = document.getElementById('p3');
-
-        const setStatus = (html) => statusEl.innerHTML = html;
-        const setStep = (html) => stepEl.innerHTML = html;
-
-        const clearTimers = () => { this.timers.forEach(t => clearTimeout(t)); this.timers = []; };
-
-        const hideAll = () => {
-          p1.setAttribute('material', 'opacity', 0);
-          p2.setAttribute('material', 'opacity', 0);
-          p3.setAttribute('material', 'opacity', 0);
-        };
-
-        const showOnly = (n) => {
-          p1.setAttribute('material', 'opacity', n === 1 ? 1 : 0);
-          p2.setAttribute('material', 'opacity', n === 2 ? 1 : 0);
-          p3.setAttribute('material', 'opacity', n === 3 ? 1 : 0);
-          setStep(`表示中：${n} <span class="pill ok">OK</span>`);
-        };
-
-        const fadeTo = (from, to, n) => {
-          from.setAttribute('animation__fadeout', { property:'material.opacity', from:1, to:0, dur:700, easing:'easeOutQuad' });
-          to.setAttribute('animation__fadein',  { property:'material.opacity', from:0, to:1, dur:1000, easing:'easeOutQuad' });
-          setStep(`表示中：${n} <span class="pill ok">OK</span>`);
-        };
-
-        // 画像を先読み（Androidで透明になる問題の対策）
-        (async () => {
-          try {
-            setStatus(`画像読込中 <span class="pill wait">LOADING</span>`);
-            await Promise.all([waitImg('img1'), waitImg('img2'), waitImg('img3')]);
-            this.ready = true;
-            setStatus(`マーカーを映してください <span class="pill wait">WAIT</span>`);
-          } catch (e) {
-            console.error(e);
-            setStatus(`画像ロード失敗 <span class="pill ng">NG</span>`);
-          }
-        })();
-
-        marker.addEventListener('markerFound', () => {
-          if (!this.ready) return;
-          if (this.running) return;
-          this.running = true;
-
-          setStatus(`マーカー検出 <span class="pill ok">FOUND</span>`);
-          showOnly(1);
-
-          this.timers.push(setTimeout(() => fadeTo(p1, p2, 2), 3000));
-          this.timers.push(setTimeout(() => fadeTo(p2, p3, 3), 6000));
-        });
-
-        marker.addEventListener('markerLost', () => {
-          clearTimers();
-          this.running = false;
-          hideAll();
-          setStep('');
-          setStatus(`マーカーを映してください <span class="pill wait">WAIT</span>`);
-        });
+      .hud {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 9999;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 78vw;
       }
-    });
+      .hud b { font-weight: 700; }
+    </style>
+  </head>
 
-    // a-assets のsrcにキャッシュバスターを付ける
-    window.addEventListener('DOMContentLoaded', () => {
-      const s1 = document.getElementById('img1');
-      const s2 = document.getElementById('img2');
-      const s3 = document.getElementById('img3');
-      if (s1) s1.src = `step1.png?v=${CACHE_BUSTER}`;
-      if (s2) s2.src = `step2.png?v=${CACHE_BUSTER}`;
-      if (s3) s3.src = `step3.png?v=${CACHE_BUSTER}`;
-    });
-  </script>
-</head>
-
-<body>
-  <div class="ui">
-    <div><strong>手順：</strong>カメラ許可 → 弱った水龍神マーカー（marker.png）を映してください</div>
-    <div class="row">
-      <span id="status">準備中…</span>
-      <span id="step"></span>
+  <body>
+    <div class="hud">
+      <b>読み取りのコツ</b><br />
+      ・マーカー全体が画面に入る距離で<br />
+      ・逆光/反射（ラミネート）を避ける
     </div>
-    <div class="row">
-      <span class="pill">更新対策：URL末尾に <strong>?v=4001</strong> を付けて開く</span>
-    </div>
-  </div>
 
-  <a-scene
-    embedded
-    vr-mode-ui="enabled:false"
-    renderer="precision:medium;antialias:true;"
-    arjs="
-      sourceType: webcam;
-      trackingMethod: best;
-      debugUIEnabled: false;
-      sourceWidth: 1280;
-      sourceHeight: 720;
-      maxDetectionRate: 30;
-    ">
-
-    <a-assets timeout="20000">
-      <!-- srcはJSで ?v= を付けて差し替え済み -->
-      <img id="img1" src="step1.png">
-      <img id="img2" src="step2.png">
-      <img id="img3" src="step3.png">
-    </a-assets>
-
-    <!-- ★ patt にもキャッシュ対策を付ける -->
-    <a-marker
-      type="pattern"
-      url="pattern-marker.patt?v=4001"
-      emitevents="true"
-      smooth="true"
-      smoothCount="10"
-      smoothTolerance="0.01"
-      smoothThreshold="5"
-      sequence-3-fade
+    <a-scene
+      vr-mode-ui="enabled: false"
+      embedded
+      renderer="antialias: true; alpha: true; colorManagement: true;"
+      arjs="sourceType: webcam; debugUIEnabled: false;"
     >
-      <!-- カメラ方向に向ける：壁貼りでも見やすい -->
-      <a-entity look-at-camera position="0 0 0.75" scale="1 1 1">
+      <a-assets>
+        <!-- 現在のGitHub構成に完全一致（直下配置） -->
+        <img id="step1" src="step1.png" />
+        <img id="step2" src="step2.png" />
+        <img id="step3" src="step3.png" />
+      </a-assets>
 
-        <!-- 比率：縦長（①②③が縦長）に合わせる -->
-        <a-plane id="p1"
-          position="0 0 0.000"
-          width="1.10" height="1.95"
-          material="shader:flat;src:#img1;transparent:true;opacity:0;side:double;">
-        </a-plane>
+      <!-- pattern-marker.patt を参照 -->
+      <a-marker type="pattern" url="pattern-marker.patt" id="marker">
+        <a-image
+          id="panel"
+          src="#step1"
+          position="0 0 0"
+          rotation="-90 0 0"
+          width="1.25"
+          height="1.25"
+          opacity="1"
+        ></a-image>
+      </a-marker>
 
-        <a-plane id="p2"
-          position="0 0 0.002"
-          width="1.10" height="1.95"
-          material="shader:flat;src:#img2;transparent:true;opacity:0;side:double;">
-        </a-plane>
+      <a-entity camera></a-entity>
+    </a-scene>
 
-        <a-plane id="p3"
-          position="0 0 0.004"
-          width="1.10" height="1.95"
-          material="shader:flat;src:#img3;transparent:true;opacity:0;side:double;">
-        </a-plane>
+    <script>
+      window.addEventListener("load", () => {
+        const marker = document.getElementById("marker");
+        const panel = document.getElementById("panel");
 
-      </a-entity>
-    </a-marker>
+        const steps = ["#step1", "#step2", "#step3"];
+        let idx = 0;
 
-    <a-entity camera></a-entity>
-  </a-scene>
-</body>
+        const STEP_MS = 3000; // ★ 3秒間隔
+        let timer = null;
+
+        const setStep = (i) => {
+          idx = (i + steps.length) % steps.length;
+          panel.setAttribute("src", steps[idx]);
+        };
+
+        const next = () => setStep(idx + 1);
+
+        const start = () => {
+          if (timer) return; // 二重起動防止
+          setStep(0);        // 読み取り開始時は必ずstep1から
+          timer = setInterval(() => {
+            next();          // ★ 無限ループ
+          }, STEP_MS);
+        };
+
+        const stop = () => {
+          if (timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+          setStep(0);        // マーカーが外れたらstep1へ戻す
+        };
+
+        marker.addEventListener("markerFound", () => {
+          console.log("markerFound");
+          start();
+        });
+
+        marker.addEventListener("markerLost", () => {
+          console.log("markerLost");
+          stop();
+        });
+      });
+    </script>
+  </body>
 </html>
