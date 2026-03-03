@@ -5,12 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <title>水龍神AR（step1→2→3）</title>
 
-  <!-- A-Frame / AR.js -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+
+    /* ✅ 黒帯対策：AR.jsが生成する video / canvas を画面全面に強制 */
+    video, canvas, .a-canvas {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: cover !important;   /* 画面に“はみ出してでも”全面表示 */
+      z-index: 0 !important;
+    }
+
+    /* iOS Safariでの余白対策 */
+    body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
     #hud{
       position: fixed; left: 14px; top: 14px; z-index: 9999;
       background: rgba(0,0,0,.55); color:#fff; padding: 12px 14px; border-radius: 14px;
@@ -25,6 +39,8 @@
     }
     #status{ opacity:.95; }
     #mini{ opacity:.85; font-size: 12px; margin-top:6px; }
+
+    /* ガイド枠（右側に黒帯が出ないことを確認する目的でも使える） */
     #guide{
       position: fixed; right: 14px; top: 110px; z-index: 9998;
       width: min(42vw, 280px); height: min(56vh, 360px);
@@ -40,7 +56,7 @@
   <div id="hud">
     <div class="row">
       <div style="font-weight:800;">手順：</div>
-      <div>カメラ許可 → 壁の「水龍神マーカー」をガイド枠に入れてください</div>
+      <div>カメラ許可 → マーカーをガイド枠に入れてください</div>
     </div>
     <div class="row" style="margin-top:8px;">
       <span id="badge">WAIT</span>
@@ -60,83 +76,54 @@
       sourceType: webcam;
       debugUIEnabled: false;
 
-      /* できるだけ高解像度で起動（端末により自動で落ちます） */
+      /* ✅ 端末性能に合わせて自動調整されるが、目標を上げておく */
       sourceWidth: 1280;
       sourceHeight: 720;
       displayWidth: 1280;
       displayHeight: 720;
 
-      /* 認識を少しでも速く */
+      /* ✅ 検出頻度（上げすぎると端末により逆効果なので50〜60程度） */
       maxDetectionRate: 60;
 
-      /* パターンマーカー */
       detectionMode: mono;
     "
   >
-    <!-- マーカー（pattern-marker.patt をリポジトリ直下に配置済み想定） -->
-    <a-marker
-      id="marker"
-      type="pattern"
-      url="pattern-marker.patt"
-    >
-      <!-- 画像表示（2枚をクロスフェードで切替） -->
+    <a-marker id="marker" type="pattern" url="pattern-marker.patt">
       <a-entity id="contentRoot" visible="false">
-        <!-- marker平面上に出す：Zを少し手前、Yを少し上げる -->
-        <a-entity id="panel" position="0 0 0.02" rotation="0 0 0" scale="1 1 1">
-          <!-- 表示面：縦長でも収まりやすいように高さ基準 -->
-          <a-image
-            id="imgA"
-            src="step1.png"
-            position="0 0 0"
-            rotation="0 0 0"
-            width="1.2"
-            height="1.6"
-            material="transparent:true; opacity: 1"
-          ></a-image>
-
-          <a-image
-            id="imgB"
-            src="step2.png"
-            position="0 0 0.001"
-            rotation="0 0 0"
-            width="1.2"
-            height="1.6"
-            material="transparent:true; opacity: 0"
-          ></a-image>
+        <a-entity id="panel" position="0 0 0.02" rotation="0 0 0">
+          <a-image id="imgA" src="step1.png"
+            position="0 0 0" width="1.2" height="1.6"
+            material="transparent:true; opacity: 1"></a-image>
+          <a-image id="imgB" src="step2.png"
+            position="0 0 0.001" width="1.2" height="1.6"
+            material="transparent:true; opacity: 0"></a-image>
         </a-entity>
       </a-entity>
     </a-marker>
 
-    <!-- カメラ -->
     <a-entity camera="near: 0.01; far: 10000"></a-entity>
   </a-scene>
 
   <script>
-    // ===== 設定 =====
-    const STEPS = ["step1.png", "step2.png", "step3.png"]; // ①→②→③
-    const STEP_MS = 3000;     // 3秒
-    const FADE_MS = 700;      // ふわっと（感動寄せ）
-    const HOLD_AFTER_FOUND_MS = 0; // 見つけた瞬間に開始
+    const STEPS = ["step1.png", "step2.png", "step3.png"];
+    const STEP_MS = 3000;
+    const FADE_MS = 700;
 
-    // ===== HUD =====
     const badge = document.getElementById("badge");
     const statusEl = document.getElementById("status");
     const camStat = document.getElementById("camStat");
     const pattStat = document.getElementById("pattStat");
 
-    // ===== A-Frame elements =====
     const marker = document.getElementById("marker");
     const contentRoot = document.getElementById("contentRoot");
     const imgA = document.getElementById("imgA");
     const imgB = document.getElementById("imgB");
 
-    // ===== 状態 =====
     let found = false;
     let timer = null;
     let stepIndex = 0;
-    let front = "A"; // 現在見えているのはAかB
+    let front = "A";
 
-    // フェードユーティリティ（opacityを時間で補間）
     function tweenOpacity(el, from, to, ms) {
       return new Promise((resolve) => {
         const start = performance.now();
@@ -162,31 +149,23 @@
       statusEl.textContent = "表示中：" + n;
     }
 
-    // 画像の「縦横比」を見て、marker上での見え方を安定化（縦長でもはみ出しにくい）
-    // A-Frameのa-imageは width/height を固定なので、ここは「縦長前提」で整えてます。
-    // もっと大きく/小さくしたい場合は width/height を変えてOKです。
-
     async function crossFadeTo(nextSrc) {
       const frontEl = (front === "A") ? imgA : imgB;
       const backEl  = (front === "A") ? imgB : imgA;
 
-      // 次を裏に仕込む
       backEl.setAttribute("src", nextSrc);
 
-      // クロスフェード
       await Promise.all([
         tweenOpacity(frontEl, 1, 0, FADE_MS),
         tweenOpacity(backEl,  0, 1, FADE_MS)
       ]);
 
-      // 表示面を入れ替え
       front = (front === "A") ? "B" : "A";
     }
 
     function startSequence() {
       stopSequence();
 
-      // 初期状態：①を確実に表示
       stepIndex = 0;
       front = "A";
       imgA.setAttribute("src", STEPS[0]);
@@ -197,52 +176,35 @@
       setHudFound(1);
       contentRoot.setAttribute("visible", "true");
 
-      // 3秒ごとに 2→3→1… と回す
       timer = setInterval(async () => {
         if (!found) return;
-
         stepIndex = (stepIndex + 1) % STEPS.length;
-        const showNum = stepIndex + 1;
-        setHudFound(showNum);
-
+        setHudFound(stepIndex + 1);
         await crossFadeTo(STEPS[stepIndex]);
       }, STEP_MS);
     }
 
     function stopSequence() {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
+      if (timer) { clearInterval(timer); timer = null; }
       contentRoot.setAttribute("visible", "false");
       setHudWait();
     }
 
-    // ===== マーカー検出イベント =====
     marker.addEventListener("markerFound", () => {
       found = true;
-      setHudFound(stepIndex + 1);
-
-      // 見つけたタイミングで開始（遅延させたいなら HOLD_AFTER_FOUND_MS を調整）
-      setTimeout(() => {
-        if (found) startSequence();
-      }, HOLD_AFTER_FOUND_MS);
+      startSequence();
     });
-
     marker.addEventListener("markerLost", () => {
       found = false;
       stopSequence();
     });
 
-    // ===== カメラ / patt 読み込み状況の簡易表示 =====
-    // camera: OK (WxH) 表示を、端末差を吸収しつつ分かる範囲で出します。
     function updateCameraStat() {
       const video = document.querySelector("video");
       if (!video) { camStat.textContent = "…"; return; }
       const w = video.videoWidth || 0;
       const h = video.videoHeight || 0;
-      if (w && h) camStat.textContent = `OK (${w}x${h})`;
-      else camStat.textContent = "OK (starting...)";
+      camStat.textContent = (w && h) ? `OK (${w}x${h})` : "OK (starting...)";
     }
 
     async function updatePattStat() {
@@ -255,14 +217,12 @@
       }
     }
 
-    // 起動後に数回更新（iOS/Androidで videoWidth が遅れて入るため）
     setHudWait();
     updatePattStat();
     setInterval(updateCameraStat, 500);
     setTimeout(updatePattStat, 1500);
 
-    // 重要：iOSで黒画面になりやすい時の保険（タップで再開）
-    // （カメラが止まっている/権限周りの復帰に効くことがあります）
+    // iOSの黒画面復帰・一時停止復帰の保険
     document.body.addEventListener("click", () => {
       const video = document.querySelector("video");
       if (video && video.paused) video.play().catch(()=>{});
