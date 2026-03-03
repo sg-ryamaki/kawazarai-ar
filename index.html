@@ -1,151 +1,225 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<title>水龍神AR</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>水龍神AR</title>
 
-<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+  <!-- A-Frame & AR.js -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 
-<style>
-html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+  <style>
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
 
-#arjs-video{
-  position:fixed !important; top:0; left:0;
-  width:100% !important; height:100% !important;
-  object-fit:cover !important; z-index:0 !important;
-}
+    /* iOS/Androidでvideo/canvasが黒にならないよう強制フルスクリーン化 */
+    #arjs-video{
+      position:fixed !important; top:0; left:0;
+      width:100% !important; height:100% !important;
+      object-fit:cover !important;
+      z-index:0 !important;
+      background:#000 !important;
+    }
 
-canvas.a-canvas, #arjs-canvas{
-  position:fixed !important; top:0; left:0;
-  width:100% !important; height:100% !important;
-  background:transparent !important; z-index:1 !important;
-}
+    canvas.a-canvas, #arjs-canvas{
+      position:fixed !important; top:0; left:0;
+      width:100% !important; height:100% !important;
+      background:transparent !important;
+      z-index:1 !important;
+    }
 
-a-scene{ position:fixed !important; inset:0 !important; background:transparent !important; z-index:1 !important; }
+    a-scene{
+      position:fixed !important; inset:0 !important;
+      background:transparent !important;
+      z-index:1 !important;
+    }
 
-.hud{
-  position:fixed; top:12px; left:12px; right:12px; z-index:9999;
-  color:#fff; background:rgba(0,0,0,.55); padding:14px; border-radius:14px;
-  font-family:-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
-}
-.badge{ display:inline-block; padding:6px 12px; border-radius:999px; background:rgba(255,160,0,.30); margin-top:6px; }
-.ok{ background:rgba(0,180,120,.35) !important; }
-.ng{ background:rgba(220,40,60,.45) !important; }
-.small{ font-size:13px; margin-top:6px; opacity:.95; }
-</style>
+    .hud{
+      position:fixed; top:12px; left:12px; right:12px; z-index:9999;
+      color:#fff; background:rgba(0,0,0,.55);
+      padding:14px; border-radius:14px;
+      font-family:-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      line-height:1.35;
+      backdrop-filter: blur(6px);
+    }
+    .row{ margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .badge{
+      display:inline-block; padding:6px 12px; border-radius:999px;
+      background:rgba(255,160,0,.28);
+      font-weight:700;
+    }
+    .ok{ background:rgba(0,180,120,.35) !important; }
+    .ng{ background:rgba(220,40,60,.45) !important; }
+    .small{ font-size:13px; opacity:.95; }
+
+    /* PC画面で見失いにくくするためのガイド（任意） */
+    .guide{
+      position:fixed; inset:0; z-index:2; pointer-events:none;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .guide .box{
+      width:min(70vw,420px); aspect-ratio:1/1;
+      border:2px dashed rgba(255,255,255,.35);
+      border-radius:16px;
+      box-shadow:0 0 0 200vmax rgba(0,0,0,.08) inset;
+    }
+    .guide.hidden{ display:none; }
+  </style>
 </head>
 
 <body>
-<div class="hud">
-  <strong>手順：</strong>カメラ許可 → 壁の「水龍神マーカー」を映してください<br>
-  <div id="status" class="badge">WAIT</div>
-  <div class="small">
-    camera: <span id="cam">...</span><br>
-    patt: <span id="patt">checking...</span>
+  <div class="hud">
+    <div><strong>手順：</strong>カメラ許可 → PC画面の「水龍神マーカー」をガイド枠に入れてください</div>
+    <div class="row">
+      <span id="status" class="badge">WAIT</span>
+      <span id="step" class="badge" style="background:rgba(255,255,255,.18);">表示中：-</span>
+    </div>
+    <div class="small" style="margin-top:8px;">
+      camera: <span id="cam">...</span><br>
+      patt: <span id="patt">checking...</span>
+    </div>
   </div>
-</div>
 
-<a-scene
-  embedded
-  vr-mode-ui="enabled:false"
-  renderer="antialias:true; alpha:true;"
-  arjs="
-    sourceType: webcam;
-    debugUIEnabled: false;
-    trackingMethod: best;
+  <!-- ガイド枠（FOUNDになったら消す） -->
+  <div id="guide" class="guide">
+    <div class="box"></div>
+  </div>
 
-    /* ★検出力アップ：解像度を上げる（端末が許す範囲で） */
-    sourceWidth: 1280;
-    sourceHeight: 720;
-    displayWidth: 1280;
-    displayHeight: 720;
+  <a-scene
+    embedded
+    vr-mode-ui="enabled:false"
+    renderer="antialias:true; alpha:true; logarithmicDepthBuffer:true;"
+    arjs="
+      sourceType: webcam;
+      debugUIEnabled: false;
+      trackingMethod: best;
 
-    /* ★検出頻度（上げすぎると重いので30） */
-    maxDetectionRate: 30;
-  "
->
-  <a-assets>
-    <img id="img1" src="./step1.png?v=999">
-    <img id="img2" src="./step2.png?v=999">
-    <img id="img3" src="./step3.png?v=999">
-  </a-assets>
+      /* ★PC画面での認識改善：入力解像度を上げる（端末が許す範囲で） */
+      sourceWidth: 1280;
+      sourceHeight: 720;
+      displayWidth: 1280;
+      displayHeight: 720;
 
-  <a-marker type="pattern" url="./pattern-marker.patt?v=999" id="marker">
-    <a-image id="s1" src="#img1" position="0 0 0.01" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
-    <a-image id="s2" src="#img2" position="0 0 0.02" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
-    <a-image id="s3" src="#img3" position="0 0 0.03" width="1.2" height="1.2" material="transparent:true; opacity:0;"></a-image>
-  </a-marker>
+      /* ★検出頻度（上げすぎると重いので30） */
+      maxDetectionRate: 30;
+    "
+  >
+    <a-assets>
+      <!-- 캐ッシュ回避したいときは ?v= を変える -->
+      <img id="img1" src="./step1.png?v=1001" crossorigin="anonymous">
+      <img id="img2" src="./step2.png?v=1001" crossorigin="anonymous">
+      <img id="img3" src="./step3.png?v=1001" crossorigin="anonymous">
+    </a-assets>
 
-  <a-entity camera></a-entity>
-</a-scene>
+    <!-- pattern marker -->
+    <a-marker type="pattern" url="./pattern-marker.patt?v=1001" id="marker">
+      <!-- ★PC画面で認識しにくい時は “少し大きめ” に出すのが有利 -->
+      <a-image id="s1" src="#img1" position="0 0 0.01" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
+      <a-image id="s2" src="#img2" position="0 0 0.02" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
+      <a-image id="s3" src="#img3" position="0 0 0.03" width="1.6" height="1.6" material="transparent:true; opacity:0;"></a-image>
+    </a-marker>
 
-<script>
-const marker = document.getElementById("marker");
-const statusEl = document.getElementById("status");
-const camEl = document.getElementById("cam");
-const pattEl = document.getElementById("patt");
+    <a-entity camera></a-entity>
+  </a-scene>
 
-const steps = [document.getElementById("s1"), document.getElementById("s2"), document.getElementById("s3")];
-let index = 0;
-let timer = null;
+  <script>
+    const marker = document.getElementById("marker");
+    const statusEl = document.getElementById("status");
+    const stepEl = document.getElementById("step");
+    const camEl = document.getElementById("cam");
+    const pattEl = document.getElementById("patt");
+    const guideEl = document.getElementById("guide");
 
-function hideAll(){ steps.forEach(s => s.setAttribute("material","opacity",0)); }
-function showStep(i){ hideAll(); steps[i].setAttribute("material","opacity",1); }
+    const steps = [
+      document.getElementById("s1"),
+      document.getElementById("s2"),
+      document.getElementById("s3")
+    ];
 
-marker.addEventListener("markerFound",()=>{
-  statusEl.textContent="FOUND";
-  statusEl.classList.add("ok");
-  statusEl.classList.remove("ng");
+    let index = 0;
+    let timer = null;
 
-  index=0;
-  showStep(index);
-
-  clearInterval(timer);
-  timer=setInterval(()=>{
-    index++;
-    if(index>=steps.length){ clearInterval(timer); return; }
-    showStep(index);
-  },3000);
-});
-
-marker.addEventListener("markerLost",()=>{
-  statusEl.textContent="WAIT";
-  statusEl.classList.remove("ok","ng");
-  hideAll();
-  clearInterval(timer);
-});
-
-function checkCamera(){
-  const v=document.querySelector("#arjs-video");
-  if(v && v.videoWidth>0){
-    camEl.textContent=`OK (${v.videoWidth}x${v.videoHeight})`;
-  }else{
-    camEl.textContent="loading...";
-  }
-}
-setInterval(checkCamera,800);
-
-(async ()=>{
-  try{
-    const res = await fetch("./pattern-marker.patt?v=999", { cache:"no-store" });
-    if(!res.ok){
-      pattEl.textContent = `NG (HTTP ${res.status})`;
-      statusEl.textContent="PATT ERROR";
-      statusEl.classList.add("ng");
-      return;
+    function hideAll() {
+      for (const s of steps) s.setAttribute("material", "opacity", 0);
     }
-    const txt = await res.text();
-    pattEl.textContent = `OK (${txt.length} chars)`;
-  }catch(e){
-    pattEl.textContent = `NG (fetch failed)`;
-    statusEl.textContent="PATT ERROR";
-    statusEl.classList.add("ng");
-  }
-})();
-</script>
 
+    function showStep(i) {
+      hideAll();
+      steps[i].setAttribute("material", "opacity", 1);
+      stepEl.textContent = `表示中：${i + 1}`;
+    }
+
+    function setFoundUI(found) {
+      if (found) {
+        statusEl.textContent = "FOUND";
+        statusEl.classList.add("ok");
+        statusEl.classList.remove("ng");
+        guideEl.classList.add("hidden");
+      } else {
+        statusEl.textContent = "WAIT";
+        statusEl.classList.remove("ok", "ng");
+        guideEl.classList.remove("hidden");
+        stepEl.textContent = "表示中：-";
+      }
+    }
+
+    marker.addEventListener("markerFound", () => {
+      setFoundUI(true);
+
+      index = 0;
+      showStep(index);
+
+      clearInterval(timer);
+      timer = setInterval(() => {
+        index++;
+        if (index >= steps.length) {
+          clearInterval(timer);
+          return;
+        }
+        showStep(index);
+      }, 3000);
+    });
+
+    marker.addEventListener("markerLost", () => {
+      setFoundUI(false);
+      hideAll();
+      clearInterval(timer);
+    });
+
+    // カメラ解像度の表示
+    function checkCamera() {
+      const v = document.querySelector("#arjs-video");
+      if (v && v.videoWidth > 0) {
+        camEl.textContent = `OK (${v.videoWidth}x${v.videoHeight})`;
+      } else {
+        camEl.textContent = "loading...";
+      }
+    }
+    setInterval(checkCamera, 800);
+
+    // patt が読めているかの簡易チェック（キャッシュ無視）
+    (async () => {
+      try {
+        const res = await fetch("./pattern-marker.patt?v=1001", { cache: "no-store" });
+        if (!res.ok) {
+          pattEl.textContent = `NG (HTTP ${res.status})`;
+          statusEl.textContent = "PATT ERROR";
+          statusEl.classList.add("ng");
+          return;
+        }
+        const txt = await res.text();
+        pattEl.textContent = `OK (${txt.length} chars)`;
+      } catch (e) {
+        pattEl.textContent = "NG (fetch failed)";
+        statusEl.textContent = "PATT ERROR";
+        statusEl.classList.add("ng");
+      }
+    })();
+
+    // 初期化
+    hideAll();
+    setFoundUI(false);
+  </script>
 </body>
 </html>
