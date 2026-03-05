@@ -3,196 +3,337 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>kawazarai-ar [DEBUG]</title>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-  <style>
-    html, body { margin:0; padding:0; width:100%; height:100%; background:#111; color:#fff;
-      font-family: system-ui, monospace; font-size: 13px; }
-    #log {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 120px;
-      overflow-y: auto; padding: 10px;
-      background: rgba(0,0,0,0.85);
-      z-index: 30;
-      white-space: pre-wrap; word-break: break-all;
-    }
-    .ok   { color: #6f6; }
-    .warn { color: #ff6; }
-    .err  { color: #f66; }
-    #btnArea {
-      position: fixed; bottom: 0; left: 0; right: 0; height: 110px;
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-      background: #222; z-index: 31; padding: 10px;
-    }
-    button {
-      padding: 14px 22px; border-radius: 10px; border: none;
-      font-size: 15px; font-weight: 800; cursor: pointer; touch-action: manipulation;
-    }
-    #btnStart { background: #0b4f9a; color: #fff; }
-    #btnClear { background: #444; color: #fff; }
+  <title>kawazarai-ar</title>
 
-    /* A-Frame は裏で動かす（ログに隠れる） */
-    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+  <!-- ★ 1.2.5 → 1.2.2 に変更（iOS Safari 実績版） -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    }
+    a-scene { position: fixed !important; inset: 0 !important; }
+    canvas  { width: 100vw !important; height: 100vh !important; }
+
+    #hud {
+      position: fixed;
+      top: env(safe-area-inset-top);
+      left: env(safe-area-inset-left);
+      right: env(safe-area-inset-right);
+      padding: 12px; z-index: 10;
+      pointer-events: none; color: #fff;
+    }
+    #panel {
+      display: inline-block; max-width: 92vw;
+      background: rgba(0,0,0,.55);
+      border-radius: 14px; padding: 12px 14px;
+    }
+    #title { margin: 0 0 6px; font-weight: 800; font-size: 18px; }
+    #desc  { margin: 0 0 8px; font-size: 14px; line-height: 1.5; opacity: .95; }
+    #row   { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .pill  { padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+    #pillState   { background: #8a5a00; }
+    #pillShowing { background: #0b6b3a; display: none; }
+    #meta { margin-top: 6px; font-size: 12px; opacity: .85; }
+
+    #guideWrap {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9; pointer-events: none;
+    }
+    #guide {
+      width: min(84vw, 640px); aspect-ratio: 1/1;
+      border: 4px dashed rgba(255,255,255,.75); border-radius: 22px;
+    }
+    #guideHint {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom) + 18px);
+      z-index: 9; color: #fff; background: rgba(0,0,0,.45);
+      padding: 8px 12px; border-radius: 999px;
+      font-size: 12px; white-space: nowrap; pointer-events: none;
+    }
+
+    #startOverlay {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.85); color: #fff; padding: 20px;
+      transition: opacity 0.4s;
+    }
+    #startOverlay.hidden { opacity: 0; pointer-events: none; }
+    #startCard {
+      width: min(92vw, 520px);
+      background: rgba(20,20,20,.92);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 16px; padding: 20px 18px; text-align: center;
+    }
+    #startCard h2 { margin: 0 0 10px; font-size: 18px; }
+    #startCard p  { margin: 0 0 14px; font-size: 13px; opacity: .9; line-height: 1.6; }
+    #status {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: #adf;
+      min-height: 20px;
+    }
+    #startBtn {
+      pointer-events: auto; appearance: none; border: none;
+      padding: 14px 28px; border-radius: 12px;
+      font-weight: 900; font-size: 17px;
+      background: #0b4f9a; color: #fff;
+      cursor: pointer; touch-action: manipulation;
+    }
+    #startBtn:disabled { background: #444; }
+    #startErr {
+      margin-top: 14px; font-size: 12px; color: #ffb3b3;
+      white-space: pre-wrap; text-align: left; display: none;
+    }
+    #retryBtn {
+      display: none; margin-top: 10px;
+      pointer-events: auto; appearance: none; border: none;
+      padding: 10px 18px; border-radius: 10px;
+      font-weight: 800; font-size: 14px;
+      background: #555; color: #fff;
+      cursor: pointer; touch-action: manipulation;
+    }
   </style>
 </head>
 <body>
 
-<div id="log">🔍 デバッグログ開始\n</div>
+  <div id="hud">
+    <div id="panel">
+      <p id="title">手順：</p>
+      <p id="desc">龍の画像全体をガイド枠に入れてください</p>
+      <div id="row">
+        <span id="pillState"   class="pill">WAIT</span>
+        <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
+      </div>
+      <div id="meta"><span id="metaState">起動待ち</span></div>
+    </div>
+  </div>
 
-<div id="btnArea">
-  <button id="btnStart">▶ START</button>
-  <button id="btnClear">ログ消去</button>
-</div>
+  <div id="guideWrap"><div id="guide"></div></div>
+  <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
 
-<a-scene
-  id="arScene"
-  mindar-image="imageTargetSrc: targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
-  embedded
-  vr-mode-ui="enabled: false"
-  device-orientation-permission-ui="enabled: false"
->
-  <a-assets>
-    <img id="asset1" src="step1.png" crossorigin="anonymous" />
-    <img id="asset2" src="step2.png" crossorigin="anonymous" />
-    <img id="asset3" src="step3.png" crossorigin="anonymous" />
-  </a-assets>
-  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-  <a-entity mindar-image-target="targetIndex: 0">
-    <a-image id="img1" src="#asset1" position="0 0 0" width="1" height="1"
-             material="transparent:true; opacity:0;"></a-image>
-  </a-entity>
-</a-scene>
+  <a-scene
+    id="arScene"
+    mindar-image="imageTargetSrc: targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
+    embedded
+    color-space="sRGB"
+    renderer="colorManagement: true;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+  >
+    <a-assets>
+      <img id="asset1" src="step1.png" crossorigin="anonymous" />
+      <img id="asset2" src="step2.png" crossorigin="anonymous" />
+      <img id="asset3" src="step3.png" crossorigin="anonymous" />
+    </a-assets>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-image id="img1" src="#asset1" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+      <a-image id="img2" src="#asset2" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+      <a-image id="img3" src="#asset3" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+    </a-entity>
+  </a-scene>
 
-<script>
-(function(){
-  const logEl = document.getElementById('log');
-  const arScene = document.getElementById('arScene');
+  <div id="startOverlay">
+    <div id="startCard">
+      <h2>📷 ARを開始します</h2>
+      <p>
+        下のボタンをタップしてカメラを起動してください。<br>
+        「カメラへのアクセスを求めています」が出たら<br>
+        <b>「許可」</b>を選択してください。<br><br>
+        起動後、<b>龍の画像全体</b>をカメラに映してください。
+      </p>
+      <div id="status">AR初期化中… しばらくお待ちください</div>
+      <button id="startBtn" disabled>準備中…</button>
+      <button id="retryBtn">🔄 リトライ</button>
+      <div id="startErr"></div>
+    </div>
+  </div>
 
-  function log(msg, type) {
-    const cls = type || '';
-    const t = new Date().toLocaleTimeString('ja-JP', {hour12:false});
-    logEl.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-  }
+  <script>
+  (function () {
+    'use strict';
 
-  document.getElementById('btnClear').onclick = () => { logEl.innerHTML = ''; };
+    const startOverlay = document.getElementById('startOverlay');
+    const startBtn     = document.getElementById('startBtn');
+    const retryBtn     = document.getElementById('retryBtn');
+    const startErr     = document.getElementById('startErr');
+    const statusEl     = document.getElementById('status');
+    const pillState    = document.getElementById('pillState');
+    const pillShowing  = document.getElementById('pillShowing');
+    const showingNum   = document.getElementById('showingNum');
+    const metaState    = document.getElementById('metaState');
+    const arScene      = document.getElementById('arScene');
+    const imgs         = ['img1','img2','img3'].map(id => document.getElementById(id));
 
-  // ── グローバルエラーを全捕捉 ──
-  window.addEventListener('error', e => {
-    log('❌ JS ERROR: ' + e.message + ' (' + e.filename + ':' + e.lineno + ')', 'err');
-  });
-  window.addEventListener('unhandledrejection', e => {
-    log('❌ PROMISE REJECTION: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), 'err');
-  });
+    let timer = null, stepIdx = 0, found = false;
 
-  // ── fetch で targets.mind が存在するか確認 ──
-  log('📡 targets.mind の存在確認中…');
-  fetch('targets.mind', { method: 'HEAD' })
-    .then(r => {
-      if (r.ok) {
-        log('✅ targets.mind: HTTP ' + r.status + ' (' + (r.headers.get('content-length') || '?') + ' bytes)', 'ok');
-      } else {
-        log('❌ targets.mind: HTTP ' + r.status + ' — ファイルが見つかりません！', 'err');
-      }
-    })
-    .catch(e => log('❌ targets.mind fetch失敗: ' + e.message, 'err'));
-
-  // ── step画像の存在確認 ──
-  ['step1.png','step2.png','step3.png'].forEach(name => {
-    fetch(name, { method: 'HEAD' })
-      .then(r => log((r.ok ? '✅ ' : '❌ ') + name + ': HTTP ' + r.status, r.ok ? 'ok' : 'err'))
-      .catch(e => log('❌ ' + name + ' fetch失敗: ' + e.message, 'err'));
-  });
-
-  // ── A-Frame / MindAR のイベント監視 ──
-  log('⏳ a-scene の読み込み待ち…');
-
-  arScene.addEventListener('loaded', () => log('✅ a-scene: loaded', 'ok'));
-  arScene.addEventListener('renderstart', () => log('✅ a-scene: renderstart', 'ok'));
-
-  // MindAR 固有イベント
-  ['arReady','arError','arLoading'].forEach(ev => {
-    arScene.addEventListener(ev, e => log('📌 MindAR event: ' + ev + ' ' + JSON.stringify(e.detail || ''), 'ok'));
-  });
-
-  // DOM変化で video 要素の生成を監視
-  const mo = new MutationObserver(() => {
-    document.querySelectorAll('video').forEach(v => {
-      if (!v._logged) {
-        v._logged = true;
-        log('📹 video要素生成: class="' + v.className + '" src=' + (v.src || v.srcObject ? '有' : '無'), 'ok');
-        v.addEventListener('playing', () => log('▶️ video playing: ' + v.videoWidth + 'x' + v.videoHeight, 'ok'));
-        v.addEventListener('error',   () => log('❌ video error: ' + (v.error && v.error.message), 'err'));
-        v.addEventListener('stalled', () => log('⚠️ video stalled', 'warn'));
-      }
-    });
-  });
-  mo.observe(document.documentElement, { childList: true, subtree: true });
-
-  // ── STARTボタン ──
-  document.getElementById('btnStart').addEventListener('click', async () => {
-    log('👆 STARTタップ');
-
-    try {
-      log('📡 getUserMedia 要求中…');
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }, audio: false
+    /* ── ステップ表示 ── */
+    function fadeTo(nextIdx) {
+      imgs.forEach((img, i) => {
+        img.removeAttribute('animation__fade');
+        img.setAttribute('animation__fade', {
+          property: 'material.opacity',
+          to: (i === nextIdx) ? 1 : 0,
+          dur: 650, easing: 'easeInOutQuad'
         });
-      } catch(_) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      }
+      });
+    }
+    function showStep(i) {
+      stepIdx = i;
+      showingNum.textContent = String(i + 1);
+      pillShowing.style.display = 'inline-block';
+      fadeTo(i);
+    }
+    function startLoop() {
+      stopLoop(); showStep(0);
+      timer = setInterval(() => { if (found) showStep((stepIdx + 1) % imgs.length); }, 3000);
+    }
+    function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
-      const tracks = stream.getVideoTracks();
-      log('✅ getUserMedia 成功: ' + (tracks[0] && tracks[0].label), 'ok');
+    /* ── ターゲット検出イベント ── */
+    function setupTargetEvents() {
+      const target = document.querySelector('[mindar-image-target]');
+      if (!target) return;
+      target.addEventListener('targetFound', () => {
+        found = true;
+        pillState.textContent = 'FOUND';
+        pillState.style.background = '#0b4f9a';
+        metaState.textContent = '検出中';
+        startLoop();
+      });
+      target.addEventListener('targetLost', () => {
+        found = false;
+        pillState.textContent = 'WAIT';
+        pillState.style.background = '#8a5a00';
+        pillShowing.style.display = 'none';
+        metaState.textContent = '龍の画像を探しています…';
+        stopLoop();
+        imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
+      });
+    }
 
-      // video 要素を全探索してストリームを注入
-      const videos = document.querySelectorAll('video');
-      log('📹 現在のvideo要素数: ' + videos.length);
+    /* ── a-scene の loaded を待ってから START を有効化 ── */
+    function waitForSceneLoaded() {
+      return new Promise((resolve, reject) => {
+        // タイムアウト 30 秒
+        const timeout = setTimeout(() => {
+          reject(new Error(
+            'AR初期化がタイムアウトしました（30秒）。\n\n' +
+            '【targets.mind を再生成してください】\n' +
+            '1. https://hiukim.github.io/mind-ar-js-doc/tools/compile を開く\n' +
+            '2. 龍の画像を「500px以下」にリサイズしてからアップロード\n' +
+            '3. Export → targets.mind を再ダウンロード\n' +
+            '4. GitHubに上書きアップロードして再試行'
+          ));
+        }, 30000);
 
-      if (videos.length === 0) {
-        log('⚠️ video要素がまだありません。5秒待ちます…', 'warn');
-        await new Promise(r => setTimeout(r, 5000));
-        const vs2 = document.querySelectorAll('video');
-        log('📹 5秒後のvideo要素数: ' + vs2.length, vs2.length > 0 ? 'ok' : 'err');
-      }
-
-      document.querySelectorAll('video').forEach((v, i) => {
-        try {
-          v.setAttribute('playsinline', '');
-          v.setAttribute('webkit-playsinline', '');
-          v.muted = true;
-          v.srcObject = stream;
-          v.play().then(() => log('▶️ video[' + i + '] play() 成功', 'ok'))
-                  .catch(e2 => log('❌ video[' + i + '] play() 失敗: ' + e2.message, 'err'));
-        } catch(e3) {
-          log('❌ video[' + i + '] srcObject注入失敗: ' + e3.message, 'err');
+        if (arScene.hasLoaded) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          arScene.addEventListener('loaded', () => {
+            clearTimeout(timeout);
+            resolve();
+          }, { once: true });
         }
       });
-
-      // systems / components のキー一覧をログ出力
-      if (arScene.systems) {
-        log('🔧 systems: ' + Object.keys(arScene.systems).join(', '));
-      }
-      if (arScene.components) {
-        log('🔧 components: ' + Object.keys(arScene.components).join(', '));
-      }
-
-    } catch(e) {
-      log('❌ エラー [' + e.name + ']: ' + e.message, 'err');
     }
-  });
 
-  // ── 5秒ごとに状態スナップショット ──
-  setInterval(() => {
-    const vs = document.querySelectorAll('video');
-    vs.forEach((v, i) => {
-      log(`📊 video[${i}] paused=${v.paused} readyState=${v.readyState} ${v.videoWidth}x${v.videoHeight}`);
+    /* ── MindAR video にストリームを注入 ── */
+    async function injectStream(stream) {
+      // MindAR 1.2.2 は .mindar-video クラスの video を生成する
+      let v = document.querySelector('.mindar-video') || document.querySelector('video');
+      if (!v) {
+        // 最大3秒待つ
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          v = document.querySelector('.mindar-video') || document.querySelector('video');
+          if (v) break;
+        }
+      }
+      if (!v) throw new Error('video要素が見つかりません。targets.mind の再生成をお試しください。');
+
+      v.setAttribute('playsinline', '');
+      v.setAttribute('webkit-playsinline', '');
+      v.muted = true;
+      v.srcObject = stream;
+      await v.play();
+      return v;
+    }
+
+    /* ── 初期化フロー ── */
+    async function init() {
+      statusEl.textContent = 'AR初期化中… (targets.mind 読み込み中)';
+      try {
+        await waitForSceneLoaded();
+        statusEl.textContent = '準備完了 — STARTを押してください';
+        startBtn.disabled    = false;
+        startBtn.textContent = '▶ START';
+        setupTargetEvents();
+      } catch (e) {
+        statusEl.textContent = '';
+        startErr.style.display = 'block';
+        startErr.textContent   = e.message;
+        retryBtn.style.display = 'inline-block';
+      }
+    }
+
+    /* ── STARTボタン ── */
+    startBtn.addEventListener('click', async () => {
+      startErr.style.display = 'none';
+      retryBtn.style.display = 'none';
+      startBtn.disabled      = true;
+      startBtn.textContent   = '起動中…';
+      statusEl.textContent   = 'カメラ起動中…';
+
+      try {
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+        } catch (_) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        await injectStream(stream);
+
+        startOverlay.classList.add('hidden');
+        metaState.textContent = '龍の画像を探しています…';
+
+      } catch (e) {
+        startBtn.disabled    = false;
+        startBtn.textContent = '▶ START';
+        statusEl.textContent = '';
+        retryBtn.style.display = 'inline-block';
+        startErr.style.display = 'block';
+        const msgs = {
+          NotAllowedError:  'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
+          NotFoundError:    'カメラが見つかりません。他のアプリがカメラを使用していないか確認してください。',
+          NotReadableError: 'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
+        };
+        startErr.textContent = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
+      }
     });
-    if (vs.length === 0) log('📊 video要素: なし', 'warn');
-  }, 5000);
 
-})();
-</script>
+    retryBtn.addEventListener('click', () => {
+      location.reload();
+    });
+
+    /* ── 起動 ── */
+    init();
+
+  })();
+  </script>
 </body>
 </html>
