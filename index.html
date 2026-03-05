@@ -56,17 +56,13 @@
       font-size: 12px; white-space: nowrap; pointer-events: none;
     }
 
-    /* STARTオーバーレイ */
     #startOverlay {
       position: fixed; inset: 0; z-index: 20;
       display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,.82); color: #fff; padding: 20px;
       transition: opacity 0.4s;
     }
-    #startOverlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
+    #startOverlay.hidden { opacity: 0; pointer-events: none; }
     #startCard {
       width: min(92vw, 520px);
       background: rgba(20,20,20,.92);
@@ -82,14 +78,19 @@
       background: #0b4f9a; color: #fff;
       cursor: pointer; touch-action: manipulation;
     }
-    /* ローディング表示 */
-    #loadingBar {
-      margin-top: 16px;
-      font-size: 13px;
-      opacity: 0.8;
-      display: none;
+    #startBtn:disabled { background: #444; }
+    #startErr {
+      margin-top: 14px; font-size: 12px; color: #ffb3b3;
+      white-space: pre-wrap; text-align: left; display: none;
     }
-    #loadingBar.visible { display: block; }
+    #retryBtn {
+      display: none; margin-top: 10px;
+      pointer-events: auto; appearance: none; border: none;
+      padding: 10px 18px; border-radius: 10px;
+      font-weight: 800; font-size: 14px;
+      background: #555; color: #fff;
+      cursor: pointer; touch-action: manipulation;
+    }
   </style>
 </head>
 <body>
@@ -112,10 +113,7 @@
   <div id="guideWrap"><div id="guide"></div></div>
   <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
 
-  <!--
-    ★ autoStart: false は廃止。MindAR に自動起動させる。
-    ★ uiLoading/uiScanning/uiError は "no" で独自UIを使う。
-  -->
+  <!-- MindAR a-scene: autoStart不使用、uiは全て無効 -->
   <a-scene
     id="arScene"
     mindar-image="imageTargetSrc: targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
@@ -143,7 +141,7 @@
     </a-entity>
   </a-scene>
 
-  <!-- STARTオーバーレイ：タップしたら消えるだけ。MindARの起動は待たない -->
+  <!-- STARTオーバーレイ -->
   <div id="startOverlay">
     <div id="startCard">
       <h2>📷 ARを開始します</h2>
@@ -154,7 +152,8 @@
         起動後、<b>龍の画像全体</b>をカメラに映してください。
       </p>
       <button id="startBtn">▶ START</button>
-      <div id="loadingBar">カメラ起動中… しばらくお待ちください</div>
+      <button id="retryBtn">🔄 リトライ</button>
+      <div id="startErr"></div>
     </div>
   </div>
 
@@ -164,7 +163,8 @@
 
     const startOverlay = document.getElementById('startOverlay');
     const startBtn     = document.getElementById('startBtn');
-    const loadingBar   = document.getElementById('loadingBar');
+    const retryBtn     = document.getElementById('retryBtn');
+    const startErr     = document.getElementById('startErr');
     const pillState    = document.getElementById('pillState');
     const pillShowing  = document.getElementById('pillShowing');
     const showingNum   = document.getElementById('showingNum');
@@ -197,7 +197,7 @@
     }
     function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
-    /* ── ターゲット検出イベント ── */
+    /* ── ターゲット検出イベント登録 ── */
     function setupTargetEvents() {
       const target = document.querySelector('[mindar-image-target]');
       if (!target) return;
@@ -219,63 +219,93 @@
       });
     }
 
-    /* ── MindAR のロード完了を監視してオーバーレイを消す ── */
-    // MindAR はカメラ起動が完了すると a-scene に arReady イベントを出す場合がある
-    // また video が再生開始したことを検知してオーバーレイを消す
-    function watchForCameraReady() {
-      // 方法1: arReady イベント
-      arScene.addEventListener('arReady', () => {
-        startOverlay.classList.add('hidden');
-        metaState.textContent = '龍の画像を探しています…';
-        setupTargetEvents();
-      });
+    /* ──────────────────────────────────────────
+       ★ 核心：getUserMedia で取得したストリームを
+          MindAR が内部で使う video 要素に直接注入する
 
-      // 方法2: video の再生開始を監視（arReady が来ない場合のフォールバック）
-      const mo = new MutationObserver(() => {
-        const v = document.querySelector('video');
-        if (v && !v._watched) {
-          v._watched = true;
-          v.addEventListener('playing', () => {
-            // 少し待ってからオーバーレイを消す
-            setTimeout(() => {
-              startOverlay.classList.add('hidden');
-              metaState.textContent = '龍の画像を探しています…';
-              setupTargetEvents();
-            }, 500);
-          });
-        }
-      });
-      mo.observe(document.documentElement, { childList: true, subtree: true });
+       MindAR は a-scene ロード後に内部で <video> を生成する。
+       その video に srcObject を差し替えることで
+       iOS Safari のユーザー操作制約を回避する。
+    ────────────────────────────────────────── */
+    async function injectStreamToMindAR(stream) {
+      // MindAR の video が生成されるまで最大5秒待つ
+      let mindVideo = null;
+      for (let i = 0; i < 50; i++) {
+        // MindAR は通常 .mindar-video または最初の video 要素を使う
+        mindVideo = document.querySelector('.mindar-video') || document.querySelector('video');
+        if (mindVideo) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      if (!mindVideo) throw new Error('MindARのvideo要素が見つかりません。ページを再読み込みしてください。');
+
+      // ★ ストリームを差し替えて再生
+      mindVideo.setAttribute('playsinline', '');
+      mindVideo.setAttribute('webkit-playsinline', '');
+      mindVideo.muted    = true;
+      mindVideo.srcObject = stream;
+      await mindVideo.play();
+
+      return mindVideo;
     }
 
-    /* ── STARTボタン：iOS Safari のユーザー操作を発生させるだけ ── */
-    startBtn.addEventListener('click', () => {
-      startBtn.disabled    = true;
-      startBtn.textContent = '起動中…';
-      loadingBar.classList.add('visible');
+    /* ── STARTボタン ── */
+    startBtn.addEventListener('click', async () => {
+      startErr.style.display = 'none';
+      retryBtn.style.display = 'none';
+      startBtn.disabled      = true;
+      startBtn.textContent   = '起動中…';
 
-      // iOS Safari でカメラ権限ダイアログを出すために
-      // ユーザー操作コンテキストで getUserMedia を呼ぶ
-      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then(stream => {
-          // ストリームは MindAR に任せるので即座に停止しない
-          // MindAR が内部で別途 getUserMedia を呼ぶため、
-          // このストリームは権限取得のためだけに使い、すぐ停止する
-          stream.getTracks().forEach(t => t.stop());
-          // MindAR の video が起動するのを待ってオーバーレイを消す
-        })
-        .catch(e => {
-          startBtn.disabled    = false;
-          startBtn.textContent = '▶ START';
-          loadingBar.classList.remove('visible');
-          if (e.name === 'NotAllowedError') {
-            alert('カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にしてから再度お試しください。');
+      try {
+        // ★ ユーザー操作コンテキストで getUserMedia（iOS必須）
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+        } catch (_) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        // ★ MindAR の video にストリームを注入して再生
+        const mindVideo = await injectStreamToMindAR(stream);
+
+        // ★ オーバーレイを消す
+        startOverlay.classList.add('hidden');
+        metaState.textContent = '龍の画像を探しています…';
+
+        // ターゲット検出イベントを登録
+        setupTargetEvents();
+
+        // video サイズをログ表示
+        const checkSize = setInterval(() => {
+          if (mindVideo.videoWidth) {
+            metaState.textContent = `camera: ${mindVideo.videoWidth}x${mindVideo.videoHeight} | 龍の画像を探しています…`;
+            clearInterval(checkSize);
           }
-        });
+        }, 300);
+
+      } catch (e) {
+        startBtn.disabled    = false;
+        startBtn.textContent = '▶ START';
+        retryBtn.style.display = 'inline-block';
+        startErr.style.display = 'block';
+
+        const msgs = {
+          NotAllowedError:  'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
+          NotFoundError:    'カメラが見つかりません。他のアプリがカメラを使用していないか確認してください。',
+          NotReadableError: 'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
+        };
+        startErr.textContent = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
+      }
     });
 
-    /* ── 起動時にイベント監視を開始 ── */
-    watchForCameraReady();
+    retryBtn.addEventListener('click', () => {
+      startBtn.disabled = false;
+      startBtn.textContent = '▶ START';
+      startBtn.click();
+    });
 
   })();
   </script>
