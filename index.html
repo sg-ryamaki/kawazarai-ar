@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>kawazarai-ar</title>
 
+  <!-- ★ AR.js + A-Frame は defer なし・同期ロードのまま -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
@@ -19,7 +20,6 @@
     a-scene { position: fixed !important; inset: 0 !important; }
     canvas { width: 100vw !important; height: 100vh !important; }
 
-    /* HUD（重い演出を避ける） */
     #hud {
       position: fixed;
       top: env(safe-area-inset-top);
@@ -45,7 +45,6 @@
     #pillShowing { background: #0b6b3a; display: none; }
     #meta { margin-top: 6px; font-size: 12px; opacity: .85; }
 
-    /* ガイド枠 */
     #guideWrap {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -71,21 +70,21 @@
       pointer-events: none;
     }
 
-    /* STARTオーバーレイ（ユーザー操作を確実に発生させる） */
+    /* ★ STARTオーバーレイ */
     #startOverlay {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
       z-index: 20;
-      background: rgba(0,0,0,.75);
+      background: rgba(0,0,0,.80);
       color: #fff;
       padding: 20px;
     }
     #startCard {
       width: min(92vw, 520px);
-      background: rgba(20,20,20,.85);
+      background: rgba(20,20,20,.90);
       border: 1px solid rgba(255,255,255,.18);
       border-radius: 16px;
-      padding: 18px 16px;
+      padding: 20px 18px;
       text-align: center;
     }
     #startCard h2 { margin: 0 0 10px; font-size: 18px; }
@@ -93,38 +92,59 @@
     #startBtn {
       pointer-events: auto;
       appearance: none; border: none;
-      padding: 12px 18px;
+      padding: 14px 22px;
       border-radius: 12px;
       font-weight: 900;
-      font-size: 16px;
+      font-size: 17px;
       background: #0b4f9a;
       color: #fff;
+      cursor: pointer;
+      /* ★ iOS タップ遅延をなくす */
+      touch-action: manipulation;
     }
     #startErr {
-      margin-top: 12px;
+      margin-top: 14px;
       font-size: 12px;
       color: #ffb3b3;
       white-space: pre-wrap;
       text-align: left;
       display: none;
     }
+    /* ★ リトライボタン */
+    #retryBtn {
+      display: none;
+      margin-top: 10px;
+      pointer-events: auto;
+      appearance: none; border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 14px;
+      background: #555;
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
   </style>
 </head>
 
 <body>
+
+  <!-- ★ STARTオーバーレイ -->
   <div id="startOverlay">
     <div id="startCard">
-      <h2>カメラを開始します</h2>
+      <h2>📷 カメラを開始します</h2>
       <p>
-        iPhone Safariでは「タップ操作」がないと<br>
-        カメラ映像が黒いままになることがあります。<br>
-        下のボタンを押して開始してください。
+        下のボタンをタップしてカメラを起動してください。<br>
+        「カメラへのアクセスを求めています」が表示されたら<b>「許可」</b>を選択してください。
       </p>
-      <button id="startBtn">START</button>
+      <button id="startBtn">▶ START</button>
+      <button id="retryBtn">🔄 リトライ</button>
       <div id="startErr"></div>
     </div>
   </div>
 
+  <!-- HUD -->
   <div id="hud">
     <div id="panel">
       <p id="title">手順：</p>
@@ -143,29 +163,38 @@
   <div id="guideWrap"><div id="guide"></div></div>
   <div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
 
+  <!--
+    ★ a-scene の arjs 設定を修正：
+      - maxDetectionRate を下げてiOS負荷軽減
+      - sourceWidth/Height は削除（AR.jsに自動判定させる）
+      - renderer で colorManagement: false を追加（映像色ずれ対策）
+  -->
   <a-scene
     embedded
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    renderer="antialias: true; alpha: true; precision: mediump;"
+    renderer="antialias: true; alpha: true; precision: mediump; colorManagement: false;"
     arjs="
       trackingMethod: best;
       sourceType: webcam;
       debugUIEnabled: false;
-      /* iPhone安定優先：あえて小さめ開始（黒画面回避に効くことが多い） */
-      sourceWidth: 640;
-      sourceHeight: 480;
-      displayWidth: 640;
-      displayHeight: 480;
+      maxDetectionRate: 60;
     "
   >
+    <a-assets>
+      <!-- ★ preload しておくことで表示遅延を防ぐ -->
+      <img id="asset1" src="step1.png" crossorigin="anonymous" />
+      <img id="asset2" src="step2.png" crossorigin="anonymous" />
+      <img id="asset3" src="step3.png" crossorigin="anonymous" />
+    </a-assets>
+
     <a-marker id="marker" type="pattern" url="pattern-marker.patt" emitevents="true">
       <a-entity position="0 0 0">
-        <a-image id="img1" src="step1.png" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
+        <a-image id="img1" src="#asset1" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
                  material="transparent:true; opacity:0;"></a-image>
-        <a-image id="img2" src="step2.png" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
+        <a-image id="img2" src="#asset2" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
                  material="transparent:true; opacity:0;"></a-image>
-        <a-image id="img3" src="step3.png" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
+        <a-image id="img3" src="#asset3" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
                  material="transparent:true; opacity:0;"></a-image>
       </a-entity>
     </a-marker>
@@ -174,9 +203,18 @@
   </a-scene>
 
   <script>
+    /* =========================================================
+       iOS Safari 黒画面対策まとめ：
+       1. getUserMedia を直接呼んでカメラ権限を先取りする
+       2. AR.js が生成する <video> に playsinline / muted を付与
+       3. ユーザー操作（tap）のコールバック内で video.play() を呼ぶ
+       4. play() 失敗時はリトライボタンを出す
+       ========================================================= */
+
     const startOverlay = document.getElementById('startOverlay');
-    const startBtn = document.getElementById('startBtn');
-    const startErr = document.getElementById('startErr');
+    const startBtn     = document.getElementById('startBtn');
+    const retryBtn     = document.getElementById('retryBtn');
+    const startErr     = document.getElementById('startErr');
 
     const pillState   = document.getElementById('pillState');
     const pillShowing = document.getElementById('pillShowing');
@@ -184,19 +222,24 @@
     const metaCam     = document.getElementById('metaCam');
 
     const marker = document.getElementById('marker');
-    const imgs = [document.getElementById('img1'), document.getElementById('img2'), document.getElementById('img3')];
+    const imgs   = [
+      document.getElementById('img1'),
+      document.getElementById('img2'),
+      document.getElementById('img3')
+    ];
 
     let timer = null;
     let index = 0;
     let found = false;
+    let arVideo = null;
 
+    /* ---------- ステップ表示ロジック ---------- */
     function fadeTo(nextIdx) {
       imgs.forEach((img, i) => {
         img.removeAttribute('animation__fade');
-        const target = (i === nextIdx) ? 1 : 0;
         img.setAttribute('animation__fade', {
           property: 'material.opacity',
-          to: target,
+          to: (i === nextIdx) ? 1 : 0,
           dur: 650,
           easing: 'easeInOutQuad'
         });
@@ -239,20 +282,17 @@
       imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
     });
 
-    // ---- iOS Safari対策：videoが生成された瞬間に属性を付与し、STARTタップで再生開始 ----
-    let arVideo = null;
-
+    /* ---------- video属性付与ユーティリティ ---------- */
     function applyVideoAttrs(v) {
       v.setAttribute('playsinline', '');
       v.setAttribute('webkit-playsinline', '');
-      v.muted = true;
-      v.autoplay = true;
-      // iOSで効くことがある
       v.setAttribute('muted', '');
       v.setAttribute('autoplay', '');
+      v.muted    = true;
+      v.autoplay = true;
     }
 
-    // video生成監視（AR.jsが後からvideoを作る）
+    /* ---------- AR.jsが生成するvideoを監視 ---------- */
     const mo = new MutationObserver(() => {
       const v = document.querySelector('video');
       if (v && v !== arVideo) {
@@ -262,48 +302,91 @@
     });
     mo.observe(document.documentElement, { childList: true, subtree: true });
 
-    // camera状態表示
+    /* ---------- camera状態を表示 ---------- */
     setInterval(() => {
       const v = arVideo || document.querySelector('video');
       if (v) {
-        metaCam.textContent = `camera: OK (${v.videoWidth || '-'}x${v.videoHeight || '-'})`;
+        const w = v.videoWidth, h = v.videoHeight;
+        metaCam.textContent = (w && h)
+          ? `camera: OK (${w}x${h})`
+          : `camera: OK (解像度待ち…)`;
       }
-    }, 400);
+    }, 500);
 
-    async function startCameraByUserGesture() {
+    /* ---------- メインの起動処理 ---------- */
+    async function doStart() {
       startErr.style.display = 'none';
-      startErr.textContent = '';
+      startErr.textContent   = '';
+      retryBtn.style.display = 'none';
+      startBtn.disabled      = true;
+      startBtn.textContent   = '起動中…';
 
       try {
-        // まず video を掴む（まだ無ければ少し待つ）
-        for (let i = 0; i < 20; i++) {
+        // ★ Step1: getUserMedia で権限を先取り（iOSはこれがないと黒画面になりやすい）
+        //    AR.js が後からこのストリームを引き継ぐ
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' }, // 背面カメラ優先
+            width:  { ideal: 1280 },
+            height: { ideal: 720  }
+          },
+          audio: false
+        });
+
+        // ★ Step2: AR.js が video 要素を作るまで最大3秒待つ
+        for (let i = 0; i < 30; i++) {
           const v = document.querySelector('video');
           if (v) { arVideo = v; break; }
           await new Promise(r => setTimeout(r, 100));
         }
-        if (!arVideo) throw new Error('video要素が見つかりません（AR.jsの初期化待ち）。');
+
+        if (!arVideo) {
+          // video 要素がまだない場合は自前で作って流す（フォールバック）
+          arVideo = document.createElement('video');
+          arVideo.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+          document.body.insertBefore(arVideo, document.body.firstChild);
+        }
 
         applyVideoAttrs(arVideo);
+        arVideo.srcObject = stream;
 
-        // iPhone Safari：ユーザー操作中に play() を実行するのが重要
+        // ★ Step3: ユーザー操作の同期コンテキスト内で play() ← iOSで最重要
         await arVideo.play();
 
-        // 成功したらオーバーレイを消す
+        // ★ 成功 → オーバーレイを非表示
         startOverlay.style.display = 'none';
 
       } catch (e) {
+        startBtn.disabled    = false;
+        startBtn.textContent = '▶ START';
+
+        let msg = '';
+        if (e.name === 'NotAllowedError') {
+          msg = 'カメラの使用が拒否されました。\n\n'
+              + 'iPhoneの設定 → Safari → カメラ を「許可」に変更してから\n'
+              + '画面を閉じて再度開いてください。';
+        } else if (e.name === 'NotFoundError') {
+          msg = 'カメラが見つかりません。\n'
+              + '他のアプリがカメラを占有していないか確認してください。';
+        } else if (e.name === 'NotReadableError' || e.name === 'AbortError') {
+          msg = 'カメラを起動できませんでした（ハードウェアエラー）。\n'
+              + 'Safariを完全に閉じてから再度お試しください。';
+        } else {
+          msg = 'エラー: ' + (e.message || String(e));
+        }
+
         startErr.style.display = 'block';
-        startErr.textContent =
-          'START後も映像が開始できませんでした。\n' +
-          '以下を確認してください：\n' +
-          '・iPhone設定 > Safari > カメラ が「許可」になっている\n' +
-          '・低電力モードOFF\n' +
-          '・上部に「保護を緩和」が出る場合は押して再読み込み\n\n' +
-          'エラー:\n' + (e && e.message ? e.message : String(e));
+        startErr.textContent   = msg;
+        retryBtn.style.display = 'inline-block';
       }
     }
 
-    startBtn.addEventListener('click', startCameraByUserGesture);
+    startBtn.addEventListener('click', doStart);
+    retryBtn.addEventListener('click', () => {
+      startBtn.disabled    = false;
+      startBtn.textContent = '▶ START';
+      doStart();
+    });
   </script>
 </body>
 </html>
