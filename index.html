@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>kawazarai-ar</title>
 
-  <!-- ★ AR.js + A-Frame は defer なし・同期ロードのまま -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
-
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -17,132 +13,100 @@
       background: #000;
       font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     }
-    a-scene { position: fixed !important; inset: 0 !important; }
-    canvas { width: 100vw !important; height: 100vh !important; }
 
+    /* カメラ映像（最背面） */
+    #bgVideo {
+      position: fixed;
+      inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* A-Frame は背景透過で上に重ねる */
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+    canvas  { width: 100vw !important; height: 100vh !important; }
+
+    /* HUD */
     #hud {
       position: fixed;
       top: env(safe-area-inset-top);
       left: env(safe-area-inset-left);
       right: env(safe-area-inset-right);
-      padding: 12px;
-      z-index: 10;
-      pointer-events: none;
-      color: #fff;
+      padding: 12px; z-index: 10;
+      pointer-events: none; color: #fff;
     }
     #panel {
-      display: inline-block;
-      max-width: 92vw;
+      display: inline-block; max-width: 92vw;
       background: rgba(0,0,0,.55);
-      border-radius: 14px;
-      padding: 12px 14px;
+      border-radius: 14px; padding: 12px 14px;
     }
     #title { margin: 0 0 6px; font-weight: 800; font-size: 18px; }
     #desc  { margin: 0 0 8px; font-size: 14px; line-height: 1.5; opacity: .95; }
-    #row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .pill { padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; }
-    #pillState { background: #8a5a00; }
+    #row   { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .pill  { padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+    #pillState   { background: #8a5a00; }
     #pillShowing { background: #0b6b3a; display: none; }
     #meta { margin-top: 6px; font-size: 12px; opacity: .85; }
 
+    /* ガイド枠 */
     #guideWrap {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
       z-index: 9; pointer-events: none;
     }
     #guide {
-      width: min(84vw, 640px);
-      aspect-ratio: 1 / 1;
-      border: 4px dashed rgba(255,255,255,.75);
-      border-radius: 22px;
+      width: min(84vw, 640px); aspect-ratio: 1/1;
+      border: 4px dashed rgba(255,255,255,.75); border-radius: 22px;
     }
     #guideHint {
-      position: fixed;
-      left: 50%; transform: translateX(-50%);
+      position: fixed; left: 50%; transform: translateX(-50%);
       bottom: calc(env(safe-area-inset-bottom) + 18px);
-      z-index: 9;
-      color: #fff;
-      background: rgba(0,0,0,.45);
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      white-space: nowrap;
-      pointer-events: none;
+      z-index: 9; color: #fff; background: rgba(0,0,0,.45);
+      padding: 8px 12px; border-radius: 999px;
+      font-size: 12px; white-space: nowrap; pointer-events: none;
     }
 
-    /* ★ STARTオーバーレイ */
+    /* STARTオーバーレイ */
     #startOverlay {
-      position: fixed; inset: 0;
+      position: fixed; inset: 0; z-index: 20;
       display: flex; align-items: center; justify-content: center;
-      z-index: 20;
-      background: rgba(0,0,0,.80);
-      color: #fff;
-      padding: 20px;
+      background: rgba(0,0,0,.82); color: #fff; padding: 20px;
     }
     #startCard {
       width: min(92vw, 520px);
-      background: rgba(20,20,20,.90);
+      background: rgba(20,20,20,.92);
       border: 1px solid rgba(255,255,255,.18);
-      border-radius: 16px;
-      padding: 20px 18px;
-      text-align: center;
+      border-radius: 16px; padding: 20px 18px; text-align: center;
     }
     #startCard h2 { margin: 0 0 10px; font-size: 18px; }
     #startCard p  { margin: 0 0 14px; font-size: 13px; opacity: .9; line-height: 1.6; }
     #startBtn {
-      pointer-events: auto;
-      appearance: none; border: none;
-      padding: 14px 22px;
-      border-radius: 12px;
-      font-weight: 900;
-      font-size: 17px;
-      background: #0b4f9a;
-      color: #fff;
-      cursor: pointer;
-      /* ★ iOS タップ遅延をなくす */
-      touch-action: manipulation;
+      pointer-events: auto; appearance: none; border: none;
+      padding: 14px 28px; border-radius: 12px;
+      font-weight: 900; font-size: 17px;
+      background: #0b4f9a; color: #fff;
+      cursor: pointer; touch-action: manipulation;
     }
+    #startBtn:disabled { background: #444; }
     #startErr {
-      margin-top: 14px;
-      font-size: 12px;
-      color: #ffb3b3;
-      white-space: pre-wrap;
-      text-align: left;
-      display: none;
+      margin-top: 14px; font-size: 12px; color: #ffb3b3;
+      white-space: pre-wrap; text-align: left; display: none;
     }
-    /* ★ リトライボタン */
     #retryBtn {
-      display: none;
-      margin-top: 10px;
-      pointer-events: auto;
-      appearance: none; border: none;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-weight: 800;
-      font-size: 14px;
-      background: #555;
-      color: #fff;
-      cursor: pointer;
-      touch-action: manipulation;
+      display: none; margin-top: 10px;
+      pointer-events: auto; appearance: none; border: none;
+      padding: 10px 18px; border-radius: 10px;
+      font-weight: 800; font-size: 14px;
+      background: #555; color: #fff;
+      cursor: pointer; touch-action: manipulation;
     }
   </style>
 </head>
-
 <body>
 
-  <!-- ★ STARTオーバーレイ -->
-  <div id="startOverlay">
-    <div id="startCard">
-      <h2>📷 カメラを開始します</h2>
-      <p>
-        下のボタンをタップしてカメラを起動してください。<br>
-        「カメラへのアクセスを求めています」が表示されたら<b>「許可」</b>を選択してください。
-      </p>
-      <button id="startBtn">▶ START</button>
-      <button id="retryBtn">🔄 リトライ</button>
-      <div id="startErr"></div>
-    </div>
-  </div>
+  <!-- ★ 自前のvideoで背景カメラ映像を表示 -->
+  <video id="bgVideo" playsinline webkit-playsinline muted autoplay></video>
 
   <!-- HUD -->
   <div id="hud">
@@ -150,7 +114,7 @@
       <p id="title">手順：</p>
       <p id="desc">カメラ許可 → マーカーをガイド枠に入れてください</p>
       <div id="row">
-        <span id="pillState" class="pill">WAIT</span>
+        <span id="pillState"   class="pill">WAIT</span>
         <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
       </div>
       <div id="meta">
@@ -163,26 +127,24 @@
   <div id="guideWrap"><div id="guide"></div></div>
   <div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
 
+  <!-- A-Frame / AR.js はスクリプトを先に読み込む -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+
   <!--
-    ★ a-scene の arjs 設定を修正：
-      - maxDetectionRate を下げてiOS負荷軽減
-      - sourceWidth/Height は削除（AR.jsに自動判定させる）
-      - renderer で colorManagement: false を追加（映像色ずれ対策）
+    ★ AR.js の arjs コンポーネントに sourceType:webcam を指定すると
+       AR.js が内部で getUserMedia を呼ぶ。
+       iOSでは renderer alpha:true で canvas を透過し、
+       背面の #bgVideo が透けて見える形にする。
   -->
   <a-scene
     embedded
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    renderer="antialias: true; alpha: true; precision: mediump; colorManagement: false;"
-    arjs="
-      trackingMethod: best;
-      sourceType: webcam;
-      debugUIEnabled: false;
-      maxDetectionRate: 60;
-    "
+    renderer="antialias:true; alpha:true; precision:mediump; colorManagement:false;"
+    arjs="trackingMethod:best; sourceType:webcam; debugUIEnabled:false; maxDetectionRate:60;"
   >
     <a-assets>
-      <!-- ★ preload しておくことで表示遅延を防ぐ -->
       <img id="asset1" src="step1.png" crossorigin="anonymous" />
       <img id="asset2" src="step2.png" crossorigin="anonymous" />
       <img id="asset3" src="step3.png" crossorigin="anonymous" />
@@ -202,69 +164,61 @@
     <a-entity camera></a-entity>
   </a-scene>
 
-  <script>
-    /* =========================================================
-       iOS Safari 黒画面対策まとめ：
-       1. getUserMedia を直接呼んでカメラ権限を先取りする
-       2. AR.js が生成する <video> に playsinline / muted を付与
-       3. ユーザー操作（tap）のコールバック内で video.play() を呼ぶ
-       4. play() 失敗時はリトライボタンを出す
-       ========================================================= */
+  <!-- STARTオーバーレイ（最前面） -->
+  <div id="startOverlay">
+    <div id="startCard">
+      <h2>📷 カメラを開始します</h2>
+      <p>
+        下のボタンをタップしてカメラを起動してください。<br>
+        「カメラへのアクセスを求めています」が出たら<br>
+        <b>「許可」</b>を選択してください。
+      </p>
+      <button id="startBtn">▶ START</button>
+      <button id="retryBtn">🔄 リトライ</button>
+      <div id="startErr"></div>
+    </div>
+  </div>
 
+  <script>
+  (function () {
+    'use strict';
+
+    const bgVideo      = document.getElementById('bgVideo');
     const startOverlay = document.getElementById('startOverlay');
     const startBtn     = document.getElementById('startBtn');
     const retryBtn     = document.getElementById('retryBtn');
     const startErr     = document.getElementById('startErr');
+    const pillState    = document.getElementById('pillState');
+    const pillShowing  = document.getElementById('pillShowing');
+    const showingNum   = document.getElementById('showingNum');
+    const metaCam      = document.getElementById('metaCam');
+    const marker       = document.getElementById('marker');
+    const imgs         = ['img1','img2','img3'].map(id => document.getElementById(id));
 
-    const pillState   = document.getElementById('pillState');
-    const pillShowing = document.getElementById('pillShowing');
-    const showingNum  = document.getElementById('showingNum');
-    const metaCam     = document.getElementById('metaCam');
+    let timer = null, index = 0, found = false;
 
-    const marker = document.getElementById('marker');
-    const imgs   = [
-      document.getElementById('img1'),
-      document.getElementById('img2'),
-      document.getElementById('img3')
-    ];
-
-    let timer = null;
-    let index = 0;
-    let found = false;
-    let arVideo = null;
-
-    /* ---------- ステップ表示ロジック ---------- */
+    /* ── ステップ表示 ── */
     function fadeTo(nextIdx) {
       imgs.forEach((img, i) => {
         img.removeAttribute('animation__fade');
         img.setAttribute('animation__fade', {
           property: 'material.opacity',
           to: (i === nextIdx) ? 1 : 0,
-          dur: 650,
-          easing: 'easeInOutQuad'
+          dur: 650, easing: 'easeInOutQuad'
         });
       });
     }
-
     function showStep(i) {
       index = i;
       showingNum.textContent = String(i + 1);
       pillShowing.style.display = 'inline-block';
       fadeTo(i);
     }
-
     function startLoop() {
-      stopLoop();
-      showStep(0);
-      timer = setInterval(() => {
-        if (!found) return;
-        showStep((index + 1) % imgs.length);
-      }, 3000);
+      stopLoop(); showStep(0);
+      timer = setInterval(() => { if (found) showStep((index + 1) % imgs.length); }, 3000);
     }
-
-    function stopLoop() {
-      if (timer) { clearInterval(timer); timer = null; }
-    }
+    function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
     marker.addEventListener('markerFound', () => {
       found = true;
@@ -272,7 +226,6 @@
       pillState.style.background = '#0b4f9a';
       startLoop();
     });
-
     marker.addEventListener('markerLost', () => {
       found = false;
       pillState.textContent = 'WAIT';
@@ -282,111 +235,85 @@
       imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
     });
 
-    /* ---------- video属性付与ユーティリティ ---------- */
-    function applyVideoAttrs(v) {
-      v.setAttribute('playsinline', '');
-      v.setAttribute('webkit-playsinline', '');
-      v.setAttribute('muted', '');
-      v.setAttribute('autoplay', '');
-      v.muted    = true;
-      v.autoplay = true;
-    }
-
-    /* ---------- AR.jsが生成するvideoを監視 ---------- */
-    const mo = new MutationObserver(() => {
-      const v = document.querySelector('video');
-      if (v && v !== arVideo) {
-        arVideo = v;
-        applyVideoAttrs(arVideo);
-      }
-    });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-
-    /* ---------- camera状態を表示 ---------- */
+    /* ── camera状態表示 ── */
     setInterval(() => {
-      const v = arVideo || document.querySelector('video');
-      if (v) {
-        const w = v.videoWidth, h = v.videoHeight;
-        metaCam.textContent = (w && h)
-          ? `camera: OK (${w}x${h})`
-          : `camera: OK (解像度待ち…)`;
+      if (bgVideo.videoWidth) {
+        metaCam.textContent = `camera: OK (${bgVideo.videoWidth}x${bgVideo.videoHeight})`;
+      } else if (bgVideo.srcObject) {
+        metaCam.textContent = 'camera: 接続済 (映像待ち…)';
       }
     }, 500);
 
-    /* ---------- メインの起動処理 ---------- */
+    /* ── AR.js が後で生成する video にも playsinline を付与 ── */
+    const mo = new MutationObserver(() => {
+      document.querySelectorAll('video').forEach(v => {
+        if (v._arPatch) return;
+        v._arPatch = true;
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
+        v.muted = true;
+        if (v !== bgVideo && v.paused) v.play().catch(() => {});
+      });
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+
+    /* ── メイン起動処理 ── */
     async function doStart() {
       startErr.style.display = 'none';
-      startErr.textContent   = '';
       retryBtn.style.display = 'none';
       startBtn.disabled      = true;
       startBtn.textContent   = '起動中…';
 
       try {
-        // ★ Step1: getUserMedia で権限を先取り（iOSはこれがないと黒画面になりやすい）
-        //    AR.js が後からこのストリームを引き継ぐ
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' }, // 背面カメラ優先
-            width:  { ideal: 1280 },
-            height: { ideal: 720  }
-          },
-          audio: false
+        // ★ まず背面カメラで試み、失敗したらデフォルトカメラにフォールバック
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+        } catch (_) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        // ★ 自前 bgVideo に流す（確実に映像を表示）
+        bgVideo.srcObject = stream;
+        bgVideo.muted     = true;
+        await bgVideo.play();  // ← ユーザー操作コンテキスト内で呼ぶのが重要
+
+        // ★ AR.js の内部 video にも同じストリームを流す
+        //    （AR.js がまだ video を作っていない場合は MutationObserver が対応）
+        document.querySelectorAll('video').forEach(v => {
+          if (v === bgVideo) return;
+          try { v.srcObject = stream; v.muted = true; v.play().catch(() => {}); } catch (_) {}
         });
 
-        // ★ Step2: AR.js が video 要素を作るまで最大3秒待つ
-        for (let i = 0; i < 30; i++) {
-          const v = document.querySelector('video');
-          if (v) { arVideo = v; break; }
-          await new Promise(r => setTimeout(r, 100));
-        }
-
-        if (!arVideo) {
-          // video 要素がまだない場合は自前で作って流す（フォールバック）
-          arVideo = document.createElement('video');
-          arVideo.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
-          document.body.insertBefore(arVideo, document.body.firstChild);
-        }
-
-        applyVideoAttrs(arVideo);
-        arVideo.srcObject = stream;
-
-        // ★ Step3: ユーザー操作の同期コンテキスト内で play() ← iOSで最重要
-        await arVideo.play();
-
-        // ★ 成功 → オーバーレイを非表示
         startOverlay.style.display = 'none';
 
       } catch (e) {
         startBtn.disabled    = false;
         startBtn.textContent = '▶ START';
 
-        let msg = '';
-        if (e.name === 'NotAllowedError') {
-          msg = 'カメラの使用が拒否されました。\n\n'
-              + 'iPhoneの設定 → Safari → カメラ を「許可」に変更してから\n'
-              + '画面を閉じて再度開いてください。';
-        } else if (e.name === 'NotFoundError') {
-          msg = 'カメラが見つかりません。\n'
-              + '他のアプリがカメラを占有していないか確認してください。';
-        } else if (e.name === 'NotReadableError' || e.name === 'AbortError') {
-          msg = 'カメラを起動できませんでした（ハードウェアエラー）。\n'
-              + 'Safariを完全に閉じてから再度お試しください。';
-        } else {
-          msg = 'エラー: ' + (e.message || String(e));
-        }
-
+        const msgs = {
+          NotAllowedError:  'カメラの使用が拒否されました。\n\n'
+                          + '【設定方法】\n'
+                          + '「設定」→「Safari」→「カメラ」を「許可」に変更し、\n'
+                          + 'Safariを再起動してページを再読み込みしてください。',
+          NotFoundError:    'カメラが見つかりません。\n他のアプリがカメラを占有していないか確認してください。',
+          NotReadableError: 'カメラにアクセスできません。\nSafariを完全に終了して再度お試しください。',
+          AbortError:       'カメラの起動が中断されました。\nページを再読み込みしてください。',
+        };
         startErr.style.display = 'block';
-        startErr.textContent   = msg;
+        startErr.textContent   = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
         retryBtn.style.display = 'inline-block';
       }
     }
 
     startBtn.addEventListener('click', doStart);
     retryBtn.addEventListener('click', () => {
-      startBtn.disabled    = false;
-      startBtn.textContent = '▶ START';
-      doStart();
+      startBtn.disabled = false; startBtn.textContent = '▶ START'; doStart();
     });
+  })();
   </script>
 </body>
 </html>
