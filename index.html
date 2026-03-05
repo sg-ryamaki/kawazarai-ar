@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>kawazarai-ar</title>
 
+  <!-- MindAR + A-Frame -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -13,18 +16,7 @@
       background: #000;
       font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     }
-
-    /* カメラ映像（最背面） */
-    #bgVideo {
-      position: fixed;
-      inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-      z-index: 0;
-    }
-
-    /* A-Frame は背景透過で上に重ねる */
-    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+    a-scene { position: fixed !important; inset: 0 !important; }
     canvas  { width: 100vw !important; height: 100vh !important; }
 
     /* HUD */
@@ -93,56 +85,42 @@
       margin-top: 14px; font-size: 12px; color: #ffb3b3;
       white-space: pre-wrap; text-align: left; display: none;
     }
-    #retryBtn {
-      display: none; margin-top: 10px;
-      pointer-events: auto; appearance: none; border: none;
-      padding: 10px 18px; border-radius: 10px;
-      font-weight: 800; font-size: 14px;
-      background: #555; color: #fff;
-      cursor: pointer; touch-action: manipulation;
-    }
   </style>
 </head>
 <body>
-
-  <!-- ★ 自前のvideoで背景カメラ映像を表示 -->
-  <video id="bgVideo" playsinline webkit-playsinline muted autoplay></video>
 
   <!-- HUD -->
   <div id="hud">
     <div id="panel">
       <p id="title">手順：</p>
-      <p id="desc">カメラ許可 → マーカーをガイド枠に入れてください</p>
+      <p id="desc">龍の画像全体をガイド枠に入れてください</p>
       <div id="row">
         <span id="pillState"   class="pill">WAIT</span>
         <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
       </div>
-      <div id="meta">
-        <span id="metaCam">camera: -</span> /
-        <span id="metaPatt">patt: OK</span>
+      <div id="meta" id="meta">
+        <span id="metaState">初期化中…</span>
       </div>
     </div>
   </div>
 
   <div id="guideWrap"><div id="guide"></div></div>
-  <div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
-
-  <!-- A-Frame / AR.js はスクリプトを先に読み込む -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+  <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
 
   <!--
-    ★ AR.js の arjs コンポーネントに sourceType:webcam を指定すると
-       AR.js が内部で getUserMedia を呼ぶ。
-       iOSでは renderer alpha:true で canvas を透過し、
-       背面の #bgVideo が透けて見える形にする。
+    MindAR の a-scene:
+    - mindar-image="imageTargetSrc: targets.mind" で .mind ファイルを指定
+    - autoStart: false にしてSTARTボタンで手動起動
+    - uiLoading / uiScanning / uiError を "no" にして独自UIを使う
   -->
   <a-scene
+    id="arScene"
+    mindar-image="imageTargetSrc: targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
     embedded
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    renderer="antialias:true; alpha:true; precision:mediump; colorManagement:false;"
-    arjs="trackingMethod:best; sourceType:webcam; debugUIEnabled:false; maxDetectionRate:60;"
   >
     <a-assets>
       <img id="asset1" src="step1.png" crossorigin="anonymous" />
@@ -150,31 +128,33 @@
       <img id="asset3" src="step3.png" crossorigin="anonymous" />
     </a-assets>
 
-    <a-marker id="marker" type="pattern" url="pattern-marker.patt" emitevents="true">
-      <a-entity position="0 0 0">
-        <a-image id="img1" src="#asset1" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
-                 material="transparent:true; opacity:0;"></a-image>
-        <a-image id="img2" src="#asset2" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
-                 material="transparent:true; opacity:0;"></a-image>
-        <a-image id="img3" src="#asset3" position="0 0 0" rotation="-90 0 0" width="1.7" height="1.7"
-                 material="transparent:true; opacity:0;"></a-image>
-      </a-entity>
-    </a-marker>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <a-entity camera></a-entity>
+    <!--
+      targetIndex="0" → targets.mind の1枚目（龍の画像）
+      画像が検出されると entity が表示される
+    -->
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-image id="img1" src="#asset1" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+      <a-image id="img2" src="#asset2" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+      <a-image id="img3" src="#asset3" position="0 0 0" width="1" height="1"
+               material="transparent:true; opacity:0;"></a-image>
+    </a-entity>
   </a-scene>
 
-  <!-- STARTオーバーレイ（最前面） -->
+  <!-- STARTオーバーレイ -->
   <div id="startOverlay">
     <div id="startCard">
-      <h2>📷 カメラを開始します</h2>
+      <h2>📷 ARを開始します</h2>
       <p>
         下のボタンをタップしてカメラを起動してください。<br>
         「カメラへのアクセスを求めています」が出たら<br>
-        <b>「許可」</b>を選択してください。
+        <b>「許可」</b>を選択してください。<br><br>
+        起動後、<b>龍の画像全体</b>をカメラに映してください。
       </p>
       <button id="startBtn">▶ START</button>
-      <button id="retryBtn">🔄 リトライ</button>
       <div id="startErr"></div>
     </div>
   </div>
@@ -183,19 +163,17 @@
   (function () {
     'use strict';
 
-    const bgVideo      = document.getElementById('bgVideo');
     const startOverlay = document.getElementById('startOverlay');
     const startBtn     = document.getElementById('startBtn');
-    const retryBtn     = document.getElementById('retryBtn');
     const startErr     = document.getElementById('startErr');
     const pillState    = document.getElementById('pillState');
     const pillShowing  = document.getElementById('pillShowing');
     const showingNum   = document.getElementById('showingNum');
-    const metaCam      = document.getElementById('metaCam');
-    const marker       = document.getElementById('marker');
+    const metaState    = document.getElementById('metaState');
+    const arScene      = document.getElementById('arScene');
     const imgs         = ['img1','img2','img3'].map(id => document.getElementById(id));
 
-    let timer = null, index = 0, found = false;
+    let timer = null, stepIdx = 0, found = false;
 
     /* ── ステップ表示 ── */
     function fadeTo(nextIdx) {
@@ -209,110 +187,77 @@
       });
     }
     function showStep(i) {
-      index = i;
+      stepIdx = i;
       showingNum.textContent = String(i + 1);
       pillShowing.style.display = 'inline-block';
       fadeTo(i);
     }
     function startLoop() {
       stopLoop(); showStep(0);
-      timer = setInterval(() => { if (found) showStep((index + 1) % imgs.length); }, 3000);
+      timer = setInterval(() => { if (found) showStep((stepIdx + 1) % imgs.length); }, 3000);
     }
     function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
-    marker.addEventListener('markerFound', () => {
-      found = true;
-      pillState.textContent = 'FOUND';
-      pillState.style.background = '#0b4f9a';
-      startLoop();
-    });
-    marker.addEventListener('markerLost', () => {
-      found = false;
-      pillState.textContent = 'WAIT';
-      pillState.style.background = '#8a5a00';
-      pillShowing.style.display = 'none';
-      stopLoop();
-      imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
-    });
+    /* ── MindAR のターゲット検出イベント ── */
+    // a-entity[mindar-image-target] の targetFound / targetLost を使う
+    arScene.addEventListener('loaded', () => {
+      metaState.textContent = 'カメラ起動済';
 
-    /* ── camera状態表示 ── */
-    setInterval(() => {
-      if (bgVideo.videoWidth) {
-        metaCam.textContent = `camera: OK (${bgVideo.videoWidth}x${bgVideo.videoHeight})`;
-      } else if (bgVideo.srcObject) {
-        metaCam.textContent = 'camera: 接続済 (映像待ち…)';
-      }
-    }, 500);
+      const target = document.querySelector('[mindar-image-target]');
+      if (!target) return;
 
-    /* ── AR.js が後で生成する video にも playsinline を付与 ── */
-    const mo = new MutationObserver(() => {
-      document.querySelectorAll('video').forEach(v => {
-        if (v._arPatch) return;
-        v._arPatch = true;
-        v.setAttribute('playsinline', '');
-        v.setAttribute('webkit-playsinline', '');
-        v.muted = true;
-        if (v !== bgVideo && v.paused) v.play().catch(() => {});
+      target.addEventListener('targetFound', () => {
+        found = true;
+        pillState.textContent = 'FOUND';
+        pillState.style.background = '#0b4f9a';
+        startLoop();
+      });
+
+      target.addEventListener('targetLost', () => {
+        found = false;
+        pillState.textContent = 'WAIT';
+        pillState.style.background = '#8a5a00';
+        pillShowing.style.display = 'none';
+        stopLoop();
+        imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
       });
     });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
 
-    /* ── メイン起動処理 ── */
-    async function doStart() {
+    /* ── STARTボタン ── */
+    startBtn.addEventListener('click', async () => {
       startErr.style.display = 'none';
-      retryBtn.style.display = 'none';
       startBtn.disabled      = true;
       startBtn.textContent   = '起動中…';
 
       try {
-        // ★ まず背面カメラで試み、失敗したらデフォルトカメラにフォールバック
-        let stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-          });
-        } catch (_) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        // MindAR の start() を呼ぶ（内部で getUserMedia も行う）
+        const sceneEl = arScene;
+        const mindarSystem = sceneEl.systems['mindar-image-system'];
+
+        if (!mindarSystem) {
+          throw new Error('MindARシステムが見つかりません。ページを再読み込みしてください。');
         }
 
-        // ★ 自前 bgVideo に流す（確実に映像を表示）
-        bgVideo.srcObject = stream;
-        bgVideo.muted     = true;
-        await bgVideo.play();  // ← ユーザー操作コンテキスト内で呼ぶのが重要
-
-        // ★ AR.js の内部 video にも同じストリームを流す
-        //    （AR.js がまだ video を作っていない場合は MutationObserver が対応）
-        document.querySelectorAll('video').forEach(v => {
-          if (v === bgVideo) return;
-          try { v.srcObject = stream; v.muted = true; v.play().catch(() => {}); } catch (_) {}
-        });
-
+        await mindarSystem.start();
         startOverlay.style.display = 'none';
+        metaState.textContent = '龍の画像を探しています…';
 
       } catch (e) {
         startBtn.disabled    = false;
         startBtn.textContent = '▶ START';
-
-        const msgs = {
-          NotAllowedError:  'カメラの使用が拒否されました。\n\n'
-                          + '【設定方法】\n'
-                          + '「設定」→「Safari」→「カメラ」を「許可」に変更し、\n'
-                          + 'Safariを再起動してページを再読み込みしてください。',
-          NotFoundError:    'カメラが見つかりません。\n他のアプリがカメラを占有していないか確認してください。',
-          NotReadableError: 'カメラにアクセスできません。\nSafariを完全に終了して再度お試しください。',
-          AbortError:       'カメラの起動が中断されました。\nページを再読み込みしてください。',
-        };
         startErr.style.display = 'block';
-        startErr.textContent   = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
-        retryBtn.style.display = 'inline-block';
-      }
-    }
 
-    startBtn.addEventListener('click', doStart);
-    retryBtn.addEventListener('click', () => {
-      startBtn.disabled = false; startBtn.textContent = '▶ START'; doStart();
+        if (e.name === 'NotAllowedError') {
+          startErr.textContent =
+            'カメラの使用が拒否されました。\n\n'
+          + '「設定」→「Safari」→「カメラ」を「許可」に変更し、\n'
+          + 'Safariを再起動してページを再読み込みしてください。';
+        } else {
+          startErr.textContent = 'エラー: ' + (e.message || String(e));
+        }
+      }
     });
+
   })();
   </script>
 </body>
