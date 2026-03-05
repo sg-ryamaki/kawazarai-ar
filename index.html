@@ -56,10 +56,16 @@
       font-size: 12px; white-space: nowrap; pointer-events: none;
     }
 
+    /* STARTオーバーレイ */
     #startOverlay {
       position: fixed; inset: 0; z-index: 20;
       display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,.82); color: #fff; padding: 20px;
+      transition: opacity 0.4s;
+    }
+    #startOverlay.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
     #startCard {
       width: min(92vw, 520px);
@@ -76,19 +82,14 @@
       background: #0b4f9a; color: #fff;
       cursor: pointer; touch-action: manipulation;
     }
-    #startBtn:disabled { background: #444; }
-    #startErr {
-      margin-top: 14px; font-size: 12px; color: #ffb3b3;
-      white-space: pre-wrap; text-align: left; display: none;
+    /* ローディング表示 */
+    #loadingBar {
+      margin-top: 16px;
+      font-size: 13px;
+      opacity: 0.8;
+      display: none;
     }
-    #retryBtn {
-      display: none; margin-top: 10px;
-      pointer-events: auto; appearance: none; border: none;
-      padding: 10px 18px; border-radius: 10px;
-      font-weight: 800; font-size: 14px;
-      background: #555; color: #fff;
-      cursor: pointer; touch-action: manipulation;
-    }
+    #loadingBar.visible { display: block; }
   </style>
 </head>
 <body>
@@ -103,7 +104,7 @@
         <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
       </div>
       <div id="meta">
-        <span id="metaState">初期化中…</span>
+        <span id="metaState">起動待ち</span>
       </div>
     </div>
   </div>
@@ -112,13 +113,12 @@
   <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
 
   <!--
-    ★ autoStart: false でSTARTボタンまで起動しない
-    ★ MindAR 1.2.x では a-scene の loaded 後に
-       el.components['mindar-image'].controller.start() で起動する
+    ★ autoStart: false は廃止。MindAR に自動起動させる。
+    ★ uiLoading/uiScanning/uiError は "no" で独自UIを使う。
   -->
   <a-scene
     id="arScene"
-    mindar-image="imageTargetSrc: targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
+    mindar-image="imageTargetSrc: targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
     embedded
     color-space="sRGB"
     renderer="colorManagement: true;"
@@ -143,7 +143,7 @@
     </a-entity>
   </a-scene>
 
-  <!-- STARTオーバーレイ -->
+  <!-- STARTオーバーレイ：タップしたら消えるだけ。MindARの起動は待たない -->
   <div id="startOverlay">
     <div id="startCard">
       <h2>📷 ARを開始します</h2>
@@ -154,8 +154,7 @@
         起動後、<b>龍の画像全体</b>をカメラに映してください。
       </p>
       <button id="startBtn">▶ START</button>
-      <button id="retryBtn">🔄 リトライ</button>
-      <div id="startErr"></div>
+      <div id="loadingBar">カメラ起動中… しばらくお待ちください</div>
     </div>
   </div>
 
@@ -165,8 +164,7 @@
 
     const startOverlay = document.getElementById('startOverlay');
     const startBtn     = document.getElementById('startBtn');
-    const retryBtn     = document.getElementById('retryBtn');
-    const startErr     = document.getElementById('startErr');
+    const loadingBar   = document.getElementById('loadingBar');
     const pillState    = document.getElementById('pillState');
     const pillShowing  = document.getElementById('pillShowing');
     const showingNum   = document.getElementById('showingNum');
@@ -199,7 +197,7 @@
     }
     function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
-    /* ── ターゲット検出イベントを登録 ── */
+    /* ── ターゲット検出イベント ── */
     function setupTargetEvents() {
       const target = document.querySelector('[mindar-image-target]');
       if (!target) return;
@@ -207,6 +205,7 @@
         found = true;
         pillState.textContent = 'FOUND';
         pillState.style.background = '#0b4f9a';
+        metaState.textContent = '検出中';
         startLoop();
       });
       target.addEventListener('targetLost', () => {
@@ -214,90 +213,69 @@
         pillState.textContent = 'WAIT';
         pillState.style.background = '#8a5a00';
         pillShowing.style.display = 'none';
+        metaState.textContent = '龍の画像を探しています…';
         stopLoop();
         imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
       });
     }
 
-    /* ── MindAR の起動：複数の方法を順番に試す ── */
-    async function startMindAR() {
-      // 方法1: a-scene の mindar-image コンポーネント経由
-      const comp = arScene.components && arScene.components['mindar-image'];
-      if (comp) {
-        if (comp.start)           { await comp.start(); return; }
-        if (comp.controller && comp.controller.start) {
-          await comp.controller.start(); return;
+    /* ── MindAR のロード完了を監視してオーバーレイを消す ── */
+    // MindAR はカメラ起動が完了すると a-scene に arReady イベントを出す場合がある
+    // また video が再生開始したことを検知してオーバーレイを消す
+    function watchForCameraReady() {
+      // 方法1: arReady イベント
+      arScene.addEventListener('arReady', () => {
+        startOverlay.classList.add('hidden');
+        metaState.textContent = '龍の画像を探しています…';
+        setupTargetEvents();
+      });
+
+      // 方法2: video の再生開始を監視（arReady が来ない場合のフォールバック）
+      const mo = new MutationObserver(() => {
+        const v = document.querySelector('video');
+        if (v && !v._watched) {
+          v._watched = true;
+          v.addEventListener('playing', () => {
+            // 少し待ってからオーバーレイを消す
+            setTimeout(() => {
+              startOverlay.classList.add('hidden');
+              metaState.textContent = '龍の画像を探しています…';
+              setupTargetEvents();
+            }, 500);
+          });
         }
-      }
-
-      // 方法2: systems を全探索して start() を持つものを呼ぶ
-      if (arScene.systems) {
-        for (const key of Object.keys(arScene.systems)) {
-          const sys = arScene.systems[key];
-          if (key.toLowerCase().includes('mindar') && typeof sys.start === 'function') {
-            await sys.start(); return;
-          }
-        }
-      }
-
-      // 方法3: MindAR がグローバルに MINDAR を公開している場合
-      if (window.MINDAR && window.MINDAR.IMAGE) {
-        // 何もしない（autoStart:false でも自動起動されることがある）
-        return;
-      }
-
-      // どれも見つからない場合はエラー
-      // systems のキー一覧をエラーに含めてデバッグしやすくする
-      const sysKeys = arScene.systems ? Object.keys(arScene.systems).join(', ') : 'none';
-      const compKeys = arScene.components ? Object.keys(arScene.components).join(', ') : 'none';
-      throw new Error(
-        'MindARの起動メソッドが見つかりません。\n' +
-        'systems: ' + sysKeys + '\n' +
-        'components: ' + compKeys
-      );
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    /* ── STARTボタン ── */
-    startBtn.addEventListener('click', async () => {
-      startErr.style.display = 'none';
-      retryBtn.style.display = 'none';
-      startBtn.disabled      = true;
-      startBtn.textContent   = '起動中…';
+    /* ── STARTボタン：iOS Safari のユーザー操作を発生させるだけ ── */
+    startBtn.addEventListener('click', () => {
+      startBtn.disabled    = true;
+      startBtn.textContent = '起動中…';
+      loadingBar.classList.add('visible');
 
-      try {
-        // a-scene の読み込み完了を待つ
-        if (!arScene.hasLoaded) {
-          await new Promise(resolve => arScene.addEventListener('loaded', resolve, { once: true }));
-        }
-
-        setupTargetEvents();
-        await startMindAR();
-
-        startOverlay.style.display = 'none';
-        metaState.textContent = '龍の画像を探しています…';
-
-      } catch (e) {
-        startBtn.disabled    = false;
-        startBtn.textContent = '▶ START';
-        retryBtn.style.display = 'inline-block';
-        startErr.style.display = 'block';
-
-        if (e.name === 'NotAllowedError') {
-          startErr.textContent =
-            'カメラの使用が拒否されました。\n\n'
-          + '「設定」→「Safari」→「カメラ」を「許可」に変更し、\n'
-          + 'Safariを再起動してページを再読み込みしてください。';
-        } else {
-          startErr.textContent = 'エラー: ' + (e.message || String(e));
-        }
-      }
+      // iOS Safari でカメラ権限ダイアログを出すために
+      // ユーザー操作コンテキストで getUserMedia を呼ぶ
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(stream => {
+          // ストリームは MindAR に任せるので即座に停止しない
+          // MindAR が内部で別途 getUserMedia を呼ぶため、
+          // このストリームは権限取得のためだけに使い、すぐ停止する
+          stream.getTracks().forEach(t => t.stop());
+          // MindAR の video が起動するのを待ってオーバーレイを消す
+        })
+        .catch(e => {
+          startBtn.disabled    = false;
+          startBtn.textContent = '▶ START';
+          loadingBar.classList.remove('visible');
+          if (e.name === 'NotAllowedError') {
+            alert('カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にしてから再度お試しください。');
+          }
+        });
     });
 
-    retryBtn.addEventListener('click', () => {
-      startBtn.disabled    = false;
-      startBtn.textContent = '▶ START';
-      startBtn.click();
-    });
+    /* ── 起動時にイベント監視を開始 ── */
+    watchForCameraReady();
 
   })();
   </script>
