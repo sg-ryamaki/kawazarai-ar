@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>kawazarai-ar</title>
 
-  <!-- ★ 1.2.5 → 1.2.2 に変更（iOS Safari 実績版） -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <!-- MindAR Three.js版（A-Frameなし） + Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
 
   <style>
     html, body {
@@ -16,8 +17,10 @@
       background: #000;
       font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     }
-    a-scene { position: fixed !important; inset: 0 !important; }
-    canvas  { width: 100vw !important; height: 100vh !important; }
+    #container {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+    }
 
     #hud {
       position: fixed;
@@ -72,12 +75,6 @@
     }
     #startCard h2 { margin: 0 0 10px; font-size: 18px; }
     #startCard p  { margin: 0 0 14px; font-size: 13px; opacity: .9; line-height: 1.6; }
-    #status {
-      margin: 0 0 16px;
-      font-size: 13px;
-      color: #adf;
-      min-height: 20px;
-    }
     #startBtn {
       pointer-events: auto; appearance: none; border: none;
       padding: 14px 28px; border-radius: 12px;
@@ -102,6 +99,8 @@
 </head>
 <body>
 
+  <div id="container"></div>
+
   <div id="hud">
     <div id="panel">
       <p id="title">手順：</p>
@@ -117,31 +116,6 @@
   <div id="guideWrap"><div id="guide"></div></div>
   <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
 
-  <a-scene
-    id="arScene"
-    mindar-image="imageTargetSrc: targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
-    embedded
-    color-space="sRGB"
-    renderer="colorManagement: true;"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-  >
-    <a-assets>
-      <img id="asset1" src="step1.png" crossorigin="anonymous" />
-      <img id="asset2" src="step2.png" crossorigin="anonymous" />
-      <img id="asset3" src="step3.png" crossorigin="anonymous" />
-    </a-assets>
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">
-      <a-image id="img1" src="#asset1" position="0 0 0" width="1" height="1"
-               material="transparent:true; opacity:0;"></a-image>
-      <a-image id="img2" src="#asset2" position="0 0 0" width="1" height="1"
-               material="transparent:true; opacity:0;"></a-image>
-      <a-image id="img3" src="#asset3" position="0 0 0" width="1" height="1"
-               material="transparent:true; opacity:0;"></a-image>
-    </a-entity>
-  </a-scene>
-
   <div id="startOverlay">
     <div id="startCard">
       <h2>📷 ARを開始します</h2>
@@ -151,8 +125,7 @@
         <b>「許可」</b>を選択してください。<br><br>
         起動後、<b>龍の画像全体</b>をカメラに映してください。
       </p>
-      <div id="status">AR初期化中… しばらくお待ちください</div>
-      <button id="startBtn" disabled>準備中…</button>
+      <button id="startBtn">▶ START</button>
       <button id="retryBtn">🔄 リトライ</button>
       <div id="startErr"></div>
     </div>
@@ -162,140 +135,130 @@
   (function () {
     'use strict';
 
+    const container    = document.getElementById('container');
     const startOverlay = document.getElementById('startOverlay');
     const startBtn     = document.getElementById('startBtn');
     const retryBtn     = document.getElementById('retryBtn');
     const startErr     = document.getElementById('startErr');
-    const statusEl     = document.getElementById('status');
     const pillState    = document.getElementById('pillState');
     const pillShowing  = document.getElementById('pillShowing');
     const showingNum   = document.getElementById('showingNum');
     const metaState    = document.getElementById('metaState');
-    const arScene      = document.getElementById('arScene');
-    const imgs         = ['img1','img2','img3'].map(id => document.getElementById(id));
 
-    let timer = null, stepIdx = 0, found = false;
+    let mindarThree = null;
+    let mixer = null;
+    let clock  = new THREE.Clock();
+    let timer  = null;
+    let stepIdx = 0;
+    let found   = false;
 
-    /* ── ステップ表示 ── */
-    function fadeTo(nextIdx) {
-      imgs.forEach((img, i) => {
-        img.removeAttribute('animation__fade');
-        img.setAttribute('animation__fade', {
-          property: 'material.opacity',
-          to: (i === nextIdx) ? 1 : 0,
-          dur: 650, easing: 'easeInOutQuad'
-        });
-      });
-    }
+    // step画像のテクスチャ
+    const textures = [];
+    const loader = new THREE.TextureLoader();
+
+    // ── ステップ表示（Three.js mesh の opacity を切り替え） ──
+    let meshes = [];
+
     function showStep(i) {
       stepIdx = i;
       showingNum.textContent = String(i + 1);
       pillShowing.style.display = 'inline-block';
-      fadeTo(i);
+      meshes.forEach((m, idx) => {
+        // フェードは簡易的に opacity で
+        m.material.opacity = (idx === i) ? 1 : 0;
+      });
     }
     function startLoop() {
       stopLoop(); showStep(0);
-      timer = setInterval(() => { if (found) showStep((stepIdx + 1) % imgs.length); }, 3000);
+      timer = setInterval(() => { if (found) showStep((stepIdx + 1) % meshes.length); }, 3000);
     }
     function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
 
-    /* ── ターゲット検出イベント ── */
-    function setupTargetEvents() {
-      const target = document.querySelector('[mindar-image-target]');
-      if (!target) return;
-      target.addEventListener('targetFound', () => {
+    // ── MindAR Three.js 初期化 ──
+    async function initAR(stream) {
+      // MindAR Three.js インスタンス生成
+      mindarThree = new window.MINDAR.IMAGE.MindARThree({
+        container:        container,
+        imageTargetSrc:   'targets.mind',
+        maxTrack:         1,
+        uiLoading:        'no',
+        uiScanning:       'no',
+        uiError:          'no',
+      });
+
+      const { renderer, scene, camera } = mindarThree;
+
+      // ── step画像をプレーンメッシュとして追加 ──
+      const stepFiles = ['step1.png', 'step2.png', 'step3.png'];
+      const anchor    = mindarThree.addAnchor(0);
+
+      for (let i = 0; i < stepFiles.length; i++) {
+        const tex = await new Promise((res, rej) => {
+          loader.load(stepFiles[i], res, undefined, rej);
+        });
+        const mat  = new THREE.MeshBasicMaterial({
+          map:         tex,
+          transparent: true,
+          opacity:     0,
+          depthTest:   false,
+        });
+        const geo  = new THREE.PlaneGeometry(1, 1);
+        const mesh = new THREE.Mesh(geo, mat);
+        anchor.group.add(mesh);
+        meshes.push(mesh);
+      }
+
+      // ── 検出イベント ──
+      anchor.onTargetFound = () => {
         found = true;
         pillState.textContent = 'FOUND';
         pillState.style.background = '#0b4f9a';
         metaState.textContent = '検出中';
         startLoop();
-      });
-      target.addEventListener('targetLost', () => {
+      };
+      anchor.onTargetLost = () => {
         found = false;
         pillState.textContent = 'WAIT';
         pillState.style.background = '#8a5a00';
-        pillShowing.style.display = 'none';
+        pillShowing.style.display  = 'none';
         metaState.textContent = '龍の画像を探しています…';
         stopLoop();
-        imgs.forEach(img => img.setAttribute('material', 'opacity', 0));
+        meshes.forEach(m => { m.material.opacity = 0; });
+      };
+
+      // ── カメラストリームを MindAR の video に注入 ──
+      // start() を呼ぶと内部で getUserMedia が走るが、
+      // iOS では既にストリームがあるのでそちらを使わせる
+      await mindarThree.start();
+
+      // start() 後に内部 video にストリームを上書き注入
+      const video = container.querySelector('video') || document.querySelector('video');
+      if (video) {
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.muted    = true;
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+        metaState.textContent = `camera: ${video.videoWidth}x${video.videoHeight}`;
+      }
+
+      // ── レンダーループ ──
+      renderer.setAnimationLoop(() => {
+        const delta = clock.getDelta();
+        if (mixer) mixer.update(delta);
+        renderer.render(scene, camera);
       });
     }
 
-    /* ── a-scene の loaded を待ってから START を有効化 ── */
-    function waitForSceneLoaded() {
-      return new Promise((resolve, reject) => {
-        // タイムアウト 30 秒
-        const timeout = setTimeout(() => {
-          reject(new Error(
-            'AR初期化がタイムアウトしました（30秒）。\n\n' +
-            '【targets.mind を再生成してください】\n' +
-            '1. https://hiukim.github.io/mind-ar-js-doc/tools/compile を開く\n' +
-            '2. 龍の画像を「500px以下」にリサイズしてからアップロード\n' +
-            '3. Export → targets.mind を再ダウンロード\n' +
-            '4. GitHubに上書きアップロードして再試行'
-          ));
-        }, 30000);
-
-        if (arScene.hasLoaded) {
-          clearTimeout(timeout);
-          resolve();
-        } else {
-          arScene.addEventListener('loaded', () => {
-            clearTimeout(timeout);
-            resolve();
-          }, { once: true });
-        }
-      });
-    }
-
-    /* ── MindAR video にストリームを注入 ── */
-    async function injectStream(stream) {
-      // MindAR 1.2.2 は .mindar-video クラスの video を生成する
-      let v = document.querySelector('.mindar-video') || document.querySelector('video');
-      if (!v) {
-        // 最大3秒待つ
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 100));
-          v = document.querySelector('.mindar-video') || document.querySelector('video');
-          if (v) break;
-        }
-      }
-      if (!v) throw new Error('video要素が見つかりません。targets.mind の再生成をお試しください。');
-
-      v.setAttribute('playsinline', '');
-      v.setAttribute('webkit-playsinline', '');
-      v.muted = true;
-      v.srcObject = stream;
-      await v.play();
-      return v;
-    }
-
-    /* ── 初期化フロー ── */
-    async function init() {
-      statusEl.textContent = 'AR初期化中… (targets.mind 読み込み中)';
-      try {
-        await waitForSceneLoaded();
-        statusEl.textContent = '準備完了 — STARTを押してください';
-        startBtn.disabled    = false;
-        startBtn.textContent = '▶ START';
-        setupTargetEvents();
-      } catch (e) {
-        statusEl.textContent = '';
-        startErr.style.display = 'block';
-        startErr.textContent   = e.message;
-        retryBtn.style.display = 'inline-block';
-      }
-    }
-
-    /* ── STARTボタン ── */
+    // ── STARTボタン ──
     startBtn.addEventListener('click', async () => {
       startErr.style.display = 'none';
       retryBtn.style.display = 'none';
       startBtn.disabled      = true;
       startBtn.textContent   = '起動中…';
-      statusEl.textContent   = 'カメラ起動中…';
 
       try {
+        // ★ ユーザー操作コンテキストで getUserMedia
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
@@ -306,7 +269,8 @@
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         }
 
-        await injectStream(stream);
+        metaState.textContent = 'AR初期化中…';
+        await initAR(stream);
 
         startOverlay.classList.add('hidden');
         metaState.textContent = '龍の画像を探しています…';
@@ -314,7 +278,6 @@
       } catch (e) {
         startBtn.disabled    = false;
         startBtn.textContent = '▶ START';
-        statusEl.textContent = '';
         retryBtn.style.display = 'inline-block';
         startErr.style.display = 'block';
         const msgs = {
@@ -326,12 +289,7 @@
       }
     });
 
-    retryBtn.addEventListener('click', () => {
-      location.reload();
-    });
-
-    /* ── 起動 ── */
-    init();
+    retryBtn.addEventListener('click', () => location.reload());
 
   })();
   </script>
