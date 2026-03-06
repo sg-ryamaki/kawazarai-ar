@@ -30,12 +30,13 @@
       z-index: 1;
     }
 
+    /* 画像をできるだけ画面全体に大きく表示 */
     #stepImg {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover;
       opacity: 0;
       transition: opacity .22s ease;
       pointer-events: none;
@@ -82,6 +83,7 @@
       border: 1px solid rgba(255,255,255,.18);
     }
 
+    /* 開始前は START ボタンのみ */
     #overlay {
       position: absolute;
       inset: 0;
@@ -91,7 +93,7 @@
       justify-content: center;
       padding: 24px;
       box-sizing: border-box;
-      background: linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,.68));
+      background: linear-gradient(to bottom, rgba(0,0,0,.35), rgba(0,0,0,.55));
     }
 
     #overlay.hidden {
@@ -99,29 +101,17 @@
     }
 
     .panel {
-      width: min(92vw, 540px);
+      width: auto;
+      min-width: 180px;
       border-radius: 18px;
-      background: rgba(17,17,17,.90);
+      background: rgba(17,17,17,.88);
       border: 1px solid rgba(255,255,255,.16);
       box-shadow: 0 12px 32px rgba(0,0,0,.35);
       color: #fff;
-      padding: 24px;
+      padding: 28px 24px;
       box-sizing: border-box;
       text-align: center;
       backdrop-filter: blur(8px);
-    }
-
-    .panel h1 {
-      margin: 0 0 12px;
-      font-size: 26px;
-      line-height: 1.3;
-    }
-
-    .panel p {
-      margin: 0 0 18px;
-      font-size: 14px;
-      line-height: 1.8;
-      color: rgba(255,255,255,.88);
     }
 
     .btn {
@@ -130,10 +120,11 @@
       border-radius: 14px;
       background: #0b4f9a;
       color: #fff;
-      padding: 14px 28px;
-      font-size: 16px;
+      padding: 14px 32px;
+      font-size: 18px;
       font-weight: 700;
       cursor: pointer;
+      min-width: 120px;
     }
 
     .btn:disabled {
@@ -155,56 +146,7 @@
       line-height: 1.6;
       color: #ffd0d0;
       display: none;
-    }
-
-    #statusBar {
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      top: max(12px, env(safe-area-inset-top));
-      z-index: 50;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      pointer-events: none;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      color: #fff;
-      background: rgba(0,0,0,.55);
-      border: 1px solid rgba(255,255,255,.14);
-      backdrop-filter: blur(6px);
-    }
-
-    #statePill.wait {
-      background: rgba(138,90,0,.82);
-    }
-
-    #statePill.found {
-      background: rgba(11,79,154,.88);
-    }
-
-    #debug {
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: max(12px, env(safe-area-inset-bottom));
-      z-index: 55;
-      background: rgba(0,0,0,.50);
-      color: #d7ecff;
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-size: 12px;
-      line-height: 1.55;
-      backdrop-filter: blur(6px);
-      white-space: pre-wrap;
+      max-width: 320px;
     }
 
     #procCanvas {
@@ -221,26 +163,14 @@
       <div class="guide-box"></div>
     </div>
 
-    <div id="statusBar">
-      <div id="statePill" class="pill wait">WAIT</div>
-      <div id="showPill" class="pill" style="display:none;">STEP <span id="showNum">1</span></div>
-    </div>
-
     <div id="overlay">
       <div class="panel">
-        <h1>ARを開始します</h1>
-        <p>
-          カメラ権限を許可して、<br>
-          マーカー画像「①.png」を中央の枠に入れてください。<br>
-          認識後、Step1→Step2→Step3→Step4 をループ表示します。
-        </p>
         <button id="startBtn" class="btn">START</button>
         <button id="retryBtn" class="btn">再試行</button>
         <div id="errorText"></div>
       </div>
     </div>
 
-    <div id="debug">初期化待機中...</div>
     <canvas id="procCanvas" width="200" height="150"></canvas>
   </div>
 
@@ -254,7 +184,7 @@
       const SCAN_W = 200;
       const SCAN_H = 150;
 
-      // 少し遠くても拾いやすくする
+      // 少し離れても拾いやすい設定
       const FOUND_NEED = 4;
       const LOST_NEED = 10;
 
@@ -264,13 +194,8 @@
       const startBtn = document.getElementById('startBtn');
       const retryBtn = document.getElementById('retryBtn');
       const errorText = document.getElementById('errorText');
-      const debug = document.getElementById('debug');
       const procCanvas = document.getElementById('procCanvas');
       const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
-
-      const statePill = document.getElementById('statePill');
-      const showPill = document.getElementById('showPill');
-      const showNum = document.getElementById('showNum');
 
       let stream = null;
       let started = false;
@@ -281,24 +206,6 @@
       let stepTimer = null;
       let frameCount = 0;
 
-      function setDebug(msg) {
-        debug.textContent = msg;
-        console.log(msg);
-      }
-
-      function setState(found) {
-        isFound = found;
-        if (found) {
-          statePill.textContent = 'FOUND';
-          statePill.classList.remove('wait');
-          statePill.classList.add('found');
-        } else {
-          statePill.textContent = 'WAIT';
-          statePill.classList.remove('found');
-          statePill.classList.add('wait');
-        }
-      }
-
       function preloadImages() {
         STEP_IMAGES.forEach(src => {
           const img = new Image();
@@ -308,8 +215,6 @@
 
       function showStep(i) {
         stepIndex = i;
-        showNum.textContent = String(i + 1);
-        showPill.style.display = 'inline-flex';
         stepImg.classList.remove('visible');
 
         setTimeout(() => {
@@ -347,20 +252,17 @@
       function resetDisplay() {
         stopStepLoop();
         stepImg.classList.remove('visible');
-        showPill.style.display = 'none';
       }
 
       function onMarkerFound() {
         if (isFound) return;
-        setState(true);
-        setDebug('マーカー認識: FOUND');
+        isFound = true;
         startStepLoop();
       }
 
       function onMarkerLost() {
         if (!isFound) return;
-        setState(false);
-        setDebug('マーカー未認識: WAIT');
+        isFound = false;
         resetDisplay();
       }
 
@@ -421,8 +323,7 @@
           started = true;
           foundCount = 0;
           lostCount = 0;
-          setState(false);
-          setDebug('カメラ起動完了。マーカー待機中...');
+          isFound = false;
         } catch (err) {
           console.error(err);
           errorText.style.display = 'block';
@@ -434,7 +335,6 @@
             '詳細: ' + (err && err.message ? err.message : String(err));
           retryBtn.style.display = 'inline-block';
           startBtn.disabled = false;
-          setDebug('カメラ起動失敗');
         }
       }
 
@@ -529,8 +429,6 @@
         if (m.textDarkRatio > 0.035 && m.textDarkRatio < 0.48) score += 1;
         if (m.blueRatio > 0.003) score += 1;
         if (m.borderBlueRatio > 0.004) score += 1;
-
-        // 遠くて小さく写っても許容
         if (m.areaRatio > 0.10 && m.areaRatio < 0.72) score += 1;
 
         return score;
@@ -538,7 +436,7 @@
 
       function findBestMarker(data, sw, sh) {
         const windows = [
-          { x: sw * 0.10, y: sh * 0.08, w: sw * 0.80, h: sh * 0.80 }, // 小さめマーカーも拾いやすい
+          { x: sw * 0.10, y: sh * 0.08, w: sw * 0.80, h: sh * 0.80 },
           { x: sw * 0.18, y: sh * 0.12, w: sw * 0.64, h: sh * 0.72 },
           { x: sw * 0.24, y: sh * 0.16, w: sw * 0.52, h: sh * 0.62 }
         ];
@@ -578,20 +476,6 @@
 
           const detected = !!m && bestScore >= 5;
 
-          if (frameCount % 10 === 0 && m) {
-            setDebug(
-              'カメラ起動完了\n' +
-              '判定スコア: ' + bestScore + ' / 6\n' +
-              '白背景率: ' + m.whiteRatio.toFixed(3) + '\n' +
-              '黒要素率: ' + m.blackRatio.toFixed(3) + '\n' +
-              '中央文字率: ' + m.textDarkRatio.toFixed(3) + '\n' +
-              '青要素率: ' + m.blueRatio.toFixed(3) + '\n' +
-              '外枠青率: ' + m.borderBlueRatio.toFixed(3) + '\n' +
-              '面積率: ' + m.areaRatio.toFixed(3) + '\n' +
-              '現在状態: ' + (isFound ? 'FOUND' : 'WAIT')
-            );
-          }
-
           if (detected) {
             foundCount++;
             lostCount = 0;
@@ -604,7 +488,6 @@
 
         } catch (err) {
           console.error(err);
-          setDebug('検出処理エラー: ' + err.message);
         }
       }
 
@@ -613,8 +496,6 @@
       window.addEventListener('beforeunload', stopCamera);
 
       preloadImages();
-      setState(false);
-      setDebug('開始画面表示OK。START を押してください。');
       detectLoop();
     })();
   </script>
