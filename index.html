@@ -350,9 +350,12 @@ function onMarkerFound(){
   },2000);
 }
 function onMarkerLost(){
-  if(!isFound)return;isFound=false;setARVisible(false);resetDisplay();
-  // BGM停止
-  if(bgm){bgm.pause();bgm.currentTime=0;}
+  if(!isFound)return;isFound=false;
+  setTimeout(()=>{
+    if(isFound)return; // 2秒以内に再認識したらキャンセル
+    setARVisible(false);resetDisplay();
+    if(bgm){bgm.pause();bgm.currentTime=0;}
+  },2000);
 }
 
 /* ── カメラ ── */
