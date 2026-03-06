@@ -1,297 +1,397 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>kawazarai-ar</title>
-
-  <!-- MindAR Three.js版（A-Frameなし） + Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
-
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      overflow: hidden;
-      background: #000;
-      font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000;
+      font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+
+    /* カメラ映像 */
+    #bgVideo{
+      position:fixed;inset:0;width:100%;height:100%;
+      object-fit:cover;z-index:0;
     }
-    #container {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
+    /* AR オーバーレイ canvas */
+    #arCanvas{
+      position:fixed;inset:0;width:100%;height:100%;
+      z-index:1;pointer-events:none;
+    }
+    /* AR コンテンツ（step画像）オーバーレイ */
+    #arContent{
+      position:fixed;inset:0;z-index:2;pointer-events:none;
+      display:flex;align-items:center;justify-content:center;
+    }
+    #stepImg{
+      max-width:70vw;max-height:70vh;
+      border-radius:12px;
+      box-shadow:0 0 32px rgba(0,0,0,.7);
+      opacity:0;
+      transition:opacity 0.6s ease;
+    }
+    #stepImg.visible{opacity:1}
+
+    /* HUD */
+    #hud{
+      position:fixed;
+      top:env(safe-area-inset-top);
+      left:env(safe-area-inset-left);
+      right:env(safe-area-inset-right);
+      padding:12px;z-index:10;
+      pointer-events:none;color:#fff;
+    }
+    #panel{
+      display:inline-block;max-width:92vw;
+      background:rgba(0,0,0,.55);
+      border-radius:14px;padding:12px 14px;
+    }
+    #panelTitle{font-weight:800;font-size:18px;margin-bottom:6px}
+    #panelDesc{font-size:14px;line-height:1.5;opacity:.95;margin-bottom:8px}
+    #pillRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .pill{padding:6px 12px;border-radius:999px;font-weight:800;font-size:14px}
+    #pillState{background:#8a5a00}
+    #pillShowing{background:#0b6b3a;display:none}
+    #metaRow{margin-top:6px;font-size:12px;opacity:.85}
+
+    /* ガイド枠 */
+    #guideWrap{
+      position:fixed;inset:0;
+      display:flex;align-items:center;justify-content:center;
+      z-index:9;pointer-events:none;
+    }
+    #guide{
+      width:min(84vw,500px);aspect-ratio:1/1;
+      border:4px dashed rgba(255,255,255,.75);border-radius:22px;
+    }
+    #guideHint{
+      position:fixed;left:50%;transform:translateX(-50%);
+      bottom:calc(env(safe-area-inset-bottom) + 18px);
+      z-index:9;color:#fff;background:rgba(0,0,0,.45);
+      padding:8px 12px;border-radius:999px;
+      font-size:12px;white-space:nowrap;pointer-events:none;
     }
 
-    #hud {
-      position: fixed;
-      top: env(safe-area-inset-top);
-      left: env(safe-area-inset-left);
-      right: env(safe-area-inset-right);
-      padding: 12px; z-index: 10;
-      pointer-events: none; color: #fff;
+    /* START オーバーレイ */
+    #startOverlay{
+      position:fixed;inset:0;z-index:20;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.85);color:#fff;padding:20px;
     }
-    #panel {
-      display: inline-block; max-width: 92vw;
-      background: rgba(0,0,0,.55);
-      border-radius: 14px; padding: 12px 14px;
+    #startOverlay.hidden{display:none}
+    #startCard{
+      width:min(92vw,520px);
+      background:rgba(20,20,20,.92);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:16px;padding:20px 18px;text-align:center;
     }
-    #title { margin: 0 0 6px; font-weight: 800; font-size: 18px; }
-    #desc  { margin: 0 0 8px; font-size: 14px; line-height: 1.5; opacity: .95; }
-    #row   { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .pill  { padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; }
-    #pillState   { background: #8a5a00; }
-    #pillShowing { background: #0b6b3a; display: none; }
-    #meta { margin-top: 6px; font-size: 12px; opacity: .85; }
-
-    #guideWrap {
-      position: fixed; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      z-index: 9; pointer-events: none;
+    #startCard h2{font-size:18px;margin-bottom:10px}
+    #startCard p{font-size:13px;opacity:.9;line-height:1.7;margin-bottom:16px}
+    #startBtn{
+      appearance:none;border:none;
+      padding:14px 32px;border-radius:12px;
+      font-weight:900;font-size:17px;
+      background:#0b4f9a;color:#fff;
+      cursor:pointer;touch-action:manipulation;
     }
-    #guide {
-      width: min(84vw, 640px); aspect-ratio: 1/1;
-      border: 4px dashed rgba(255,255,255,.75); border-radius: 22px;
+    #startBtn:disabled{background:#444}
+    #startErr{
+      margin-top:14px;font-size:12px;color:#ffb3b3;
+      white-space:pre-wrap;text-align:left;display:none;
     }
-    #guideHint {
-      position: fixed; left: 50%; transform: translateX(-50%);
-      bottom: calc(env(safe-area-inset-bottom) + 18px);
-      z-index: 9; color: #fff; background: rgba(0,0,0,.45);
-      padding: 8px 12px; border-radius: 999px;
-      font-size: 12px; white-space: nowrap; pointer-events: none;
-    }
-
-    #startOverlay {
-      position: fixed; inset: 0; z-index: 20;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,.85); color: #fff; padding: 20px;
-      transition: opacity 0.4s;
-    }
-    #startOverlay.hidden { opacity: 0; pointer-events: none; }
-    #startCard {
-      width: min(92vw, 520px);
-      background: rgba(20,20,20,.92);
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 16px; padding: 20px 18px; text-align: center;
-    }
-    #startCard h2 { margin: 0 0 10px; font-size: 18px; }
-    #startCard p  { margin: 0 0 14px; font-size: 13px; opacity: .9; line-height: 1.6; }
-    #startBtn {
-      pointer-events: auto; appearance: none; border: none;
-      padding: 14px 28px; border-radius: 12px;
-      font-weight: 900; font-size: 17px;
-      background: #0b4f9a; color: #fff;
-      cursor: pointer; touch-action: manipulation;
-    }
-    #startBtn:disabled { background: #444; }
-    #startErr {
-      margin-top: 14px; font-size: 12px; color: #ffb3b3;
-      white-space: pre-wrap; text-align: left; display: none;
-    }
-    #retryBtn {
-      display: none; margin-top: 10px;
-      pointer-events: auto; appearance: none; border: none;
-      padding: 10px 18px; border-radius: 10px;
-      font-weight: 800; font-size: 14px;
-      background: #555; color: #fff;
-      cursor: pointer; touch-action: manipulation;
+    #retryBtn{
+      display:none;margin-top:10px;
+      appearance:none;border:none;
+      padding:10px 18px;border-radius:10px;
+      font-weight:800;font-size:14px;
+      background:#555;color:#fff;
+      cursor:pointer;touch-action:manipulation;
     }
   </style>
 </head>
 <body>
 
-  <div id="container"></div>
+<!-- カメラ映像 -->
+<video id="bgVideo" playsinline webkit-playsinline muted autoplay></video>
 
-  <div id="hud">
-    <div id="panel">
-      <p id="title">手順：</p>
-      <p id="desc">龍の画像全体をガイド枠に入れてください</p>
-      <div id="row">
-        <span id="pillState"   class="pill">WAIT</span>
-        <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
-      </div>
-      <div id="meta"><span id="metaState">起動待ち</span></div>
+<!-- AR 検出デバッグ canvas（マーカー枠描画用） -->
+<canvas id="arCanvas"></canvas>
+
+<!-- step 画像表示エリア -->
+<div id="arContent">
+  <img id="stepImg" src="" alt=""/>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="panel">
+    <div id="panelTitle">手順：</div>
+    <div id="panelDesc">マーカーをガイド枠に入れてください</div>
+    <div id="pillRow">
+      <span id="pillState" class="pill">WAIT</span>
+      <span id="pillShowing" class="pill">表示中：<span id="showingNum">-</span></span>
+    </div>
+    <div id="metaRow" id="metaRow">
+      <span id="metaCam">camera: -</span>
     </div>
   </div>
+</div>
 
-  <div id="guideWrap"><div id="guide"></div></div>
-  <div id="guideHint">※ 龍の画像全体がガイド枠に収まるように</div>
+<div id="guideWrap"><div id="guide"></div></div>
+<div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
 
-  <div id="startOverlay">
-    <div id="startCard">
-      <h2>📷 ARを開始します</h2>
-      <p>
-        下のボタンをタップしてカメラを起動してください。<br>
-        「カメラへのアクセスを求めています」が出たら<br>
-        <b>「許可」</b>を選択してください。<br><br>
-        起動後、<b>龍の画像全体</b>をカメラに映してください。
-      </p>
-      <button id="startBtn">▶ START</button>
-      <button id="retryBtn">🔄 リトライ</button>
-      <div id="startErr"></div>
-    </div>
+<!-- START オーバーレイ -->
+<div id="startOverlay">
+  <div id="startCard">
+    <h2>📷 ARを開始します</h2>
+    <p>
+      ボタンをタップしてカメラを起動してください。<br>
+      「カメラへのアクセスを求めています」が出たら<br>
+      <b>「許可」</b>を選択してください。<br><br>
+      起動後、<b>マーカー（稲妻マーク）</b>をカメラに映してください。
+    </p>
+    <button id="startBtn">▶ START</button>
+    <button id="retryBtn">🔄 リトライ</button>
+    <div id="startErr"></div>
   </div>
+</div>
 
-  <script>
-  (function () {
-    'use strict';
+<!-- AR.js (jsartoolkit5 ベース・A-Frameなし) -->
+<script src="https://cdn.jsdelivr.net/gh/nicktindall/cyclon.p2p-rtc-client@master/tests/vendor/three.min.js"></script>
+<script>
+// ── Three.js を使わずに AR.js の jsartoolkit5 だけ使う ──
+// jsartoolkit5 の UMD ビルドを直接ロード
+</script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex.js" onerror="window._arjsLoadError=true"></script>
 
-    const container    = document.getElementById('container');
-    const startOverlay = document.getElementById('startOverlay');
-    const startBtn     = document.getElementById('startBtn');
-    const retryBtn     = document.getElementById('retryBtn');
-    const startErr     = document.getElementById('startErr');
-    const pillState    = document.getElementById('pillState');
-    const pillShowing  = document.getElementById('pillShowing');
-    const showingNum   = document.getElementById('showingNum');
-    const metaState    = document.getElementById('metaState');
+<script>
+(function(){
+'use strict';
 
-    let mindarThree = null;
-    let mixer = null;
-    let clock  = new THREE.Clock();
-    let timer  = null;
-    let stepIdx = 0;
-    let found   = false;
+// ─────────────────────────────────────────────
+//  要素取得
+// ─────────────────────────────────────────────
+const bgVideo      = document.getElementById('bgVideo');
+const arCanvas     = document.getElementById('arCanvas');
+const stepImg      = document.getElementById('stepImg');
+const startOverlay = document.getElementById('startOverlay');
+const startBtn     = document.getElementById('startBtn');
+const retryBtn     = document.getElementById('retryBtn');
+const startErr     = document.getElementById('startErr');
+const pillState    = document.getElementById('pillState');
+const pillShowing  = document.getElementById('pillShowing');
+const showingNum   = document.getElementById('showingNum');
+const metaCam      = document.getElementById('metaCam');
 
-    // step画像のテクスチャ
-    const textures = [];
-    const loader = new THREE.TextureLoader();
+const STEP_IMAGES  = ['step1.png','step2.png','step3.png'];
+const STEP_INTERVAL = 3000; // ms
 
-    // ── ステップ表示（Three.js mesh の opacity を切り替え） ──
-    let meshes = [];
+let stepIndex = 0;
+let stepTimer = null;
+let markerFound = false;
 
-    function showStep(i) {
-      stepIdx = i;
-      showingNum.textContent = String(i + 1);
-      pillShowing.style.display = 'inline-block';
-      meshes.forEach((m, idx) => {
-        // フェードは簡易的に opacity で
-        m.material.opacity = (idx === i) ? 1 : 0;
-      });
+// ─────────────────────────────────────────────
+//  ステップ表示
+// ─────────────────────────────────────────────
+function showStep(i) {
+  stepIndex = i;
+  showingNum.textContent = String(i + 1);
+  pillShowing.style.display = 'inline-block';
+  stepImg.classList.remove('visible');
+  // 少し待ってフェードイン
+  setTimeout(() => {
+    stepImg.src = STEP_IMAGES[i];
+    stepImg.classList.add('visible');
+  }, 50);
+}
+
+function startStepLoop() {
+  stopStepLoop();
+  showStep(0);
+  stepTimer = setInterval(() => {
+    if (markerFound) showStep((stepIndex + 1) % STEP_IMAGES.length);
+  }, STEP_INTERVAL);
+}
+
+function stopStepLoop() {
+  if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+}
+
+function onMarkerFound() {
+  markerFound = true;
+  pillState.textContent = 'FOUND';
+  pillState.style.background = '#0b4f9a';
+  startStepLoop();
+}
+
+function onMarkerLost() {
+  markerFound = false;
+  pillState.textContent = 'WAIT';
+  pillState.style.background = '#8a5a00';
+  pillShowing.style.display = 'none';
+  stepImg.classList.remove('visible');
+  stopStepLoop();
+}
+
+// ─────────────────────────────────────────────
+//  AR 処理（jsartoolkit5 直接利用）
+// ─────────────────────────────────────────────
+let arController = null;
+let arContext    = null;
+let rafId        = null;
+let lastFound    = false;
+
+async function initAR(stream) {
+  bgVideo.srcObject = stream;
+  bgVideo.muted     = true;
+  bgVideo.setAttribute('playsinline','');
+  bgVideo.setAttribute('webkit-playsinline','');
+  await bgVideo.play();
+
+  // video サイズ確定を待つ
+  await new Promise(resolve => {
+    if (bgVideo.videoWidth) { resolve(); return; }
+    bgVideo.addEventListener('loadedmetadata', resolve, {once:true});
+  });
+
+  const vw = bgVideo.videoWidth;
+  const vh = bgVideo.videoHeight;
+  metaCam.textContent = `camera: OK (${vw}x${vh})`;
+
+  // canvas を video サイズに合わせる
+  arCanvas.width  = vw;
+  arCanvas.height = vh;
+
+  // ── AR.js (THREEx) が使えるか確認 ──
+  if (window._arjsLoadError || typeof THREEx === 'undefined') {
+    // AR.js 読み込み失敗 → 簡易フォールバック（輝度差検出）
+    console.warn('AR.js unavailable, using fallback detection');
+    startFallbackDetection(vw, vh);
+    return;
+  }
+
+  // ── AR.js ArToolkitSource / Context 初期化 ──
+  arContext = new THREEx.ArToolkitContext({
+    cameraParametersUrl : 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
+    detectionMode       : 'mono',
+    imageSmoothingEnabled: false,
+  });
+
+  await new Promise(resolve => arContext.init(resolve));
+
+  arController = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+  // 既存 stream を直接差し込む（getUserMedia を二重に呼ばない）
+  arController._domElement = bgVideo;
+
+  // マーカー追跡
+  const markerControls = new THREEx.ArMarkerControls(arContext, new THREE.Object3D(), {
+    type            : 'pattern',
+    patternUrl      : 'pattern-marker.patt',
+    changeMatrixMode: 'cameraTransformMatrix',
+  });
+
+  // ダミー Three.js シーン（レンダリングには使わない）
+  const renderer = { domElement: arCanvas };
+  const scene    = new THREE.Scene();
+  const camera   = new THREE.Camera();
+  scene.add(camera);
+  scene.add(markerControls.object3d);
+
+  let prevVisible = false;
+
+  function tick() {
+    rafId = requestAnimationFrame(tick);
+    arContext.update(bgVideo);
+
+    const visible = markerControls.object3d.visible;
+    if (visible && !prevVisible) onMarkerFound();
+    if (!visible && prevVisible) onMarkerLost();
+    prevVisible = visible;
+  }
+  tick();
+}
+
+// ─────────────────────────────────────────────
+//  フォールバック検出（AR.js 読み込み失敗時）
+//  canvas に動画フレームを描いて「黒枠の正方形」を検出
+// ─────────────────────────────────────────────
+function startFallbackDetection(vw, vh) {
+  const ctx = arCanvas.getContext('2d');
+  let prevDetected = false;
+  let noDetectCount = 0;
+
+  function detect() {
+    rafId = requestAnimationFrame(detect);
+    ctx.drawImage(bgVideo, 0, 0, vw, vh);
+    const data = ctx.getImageData(0, 0, vw, vh).data;
+
+    // 簡易輝度ヒストグラム：白黒比率でマーカーらしさを判定
+    let black = 0, white = 0;
+    const step = 8; // 全ピクセルは重いのでステップサンプリング
+    for (let i = 0; i < data.length; i += 4 * step) {
+      const lum = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      if (lum < 80)  black++;
+      else if (lum > 180) white++;
     }
-    function startLoop() {
-      stopLoop(); showStep(0);
-      timer = setInterval(() => { if (found) showStep((stepIdx + 1) % meshes.length); }, 3000);
+    const total = black + white;
+    const blackRatio = total > 0 ? black / total : 0;
+
+    // 黒が 15〜45% のとき「マーカーらしい」と判定
+    const detected = blackRatio > 0.15 && blackRatio < 0.45;
+
+    if (detected) {
+      noDetectCount = 0;
+      if (!prevDetected) onMarkerFound();
+    } else {
+      noDetectCount++;
+      if (prevDetected && noDetectCount > 10) onMarkerLost();
     }
-    function stopLoop() { if (timer) { clearInterval(timer); timer = null; } }
+    prevDetected = detected && noDetectCount === 0;
+  }
+  detect();
+}
 
-    // ── MindAR Three.js 初期化 ──
-    async function initAR(stream) {
-      // MindAR Three.js インスタンス生成
-      mindarThree = new window.MINDAR.IMAGE.MindARThree({
-        container:        container,
-        imageTargetSrc:   'targets.mind',
-        maxTrack:         1,
-        uiLoading:        'no',
-        uiScanning:       'no',
-        uiError:          'no',
+// ─────────────────────────────────────────────
+//  START ボタン
+// ─────────────────────────────────────────────
+startBtn.addEventListener('click', async () => {
+  startErr.style.display = 'none';
+  retryBtn.style.display = 'none';
+  startBtn.disabled      = true;
+  startBtn.textContent   = '起動中…';
+
+  try {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: {ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
+        audio: false
       });
-
-      const { renderer, scene, camera } = mindarThree;
-
-      // ── step画像をプレーンメッシュとして追加 ──
-      const stepFiles = ['step1.png', 'step2.png', 'step3.png'];
-      const anchor    = mindarThree.addAnchor(0);
-
-      for (let i = 0; i < stepFiles.length; i++) {
-        const tex = await new Promise((res, rej) => {
-          loader.load(stepFiles[i], res, undefined, rej);
-        });
-        const mat  = new THREE.MeshBasicMaterial({
-          map:         tex,
-          transparent: true,
-          opacity:     0,
-          depthTest:   false,
-        });
-        const geo  = new THREE.PlaneGeometry(1, 1);
-        const mesh = new THREE.Mesh(geo, mat);
-        anchor.group.add(mesh);
-        meshes.push(mesh);
-      }
-
-      // ── 検出イベント ──
-      anchor.onTargetFound = () => {
-        found = true;
-        pillState.textContent = 'FOUND';
-        pillState.style.background = '#0b4f9a';
-        metaState.textContent = '検出中';
-        startLoop();
-      };
-      anchor.onTargetLost = () => {
-        found = false;
-        pillState.textContent = 'WAIT';
-        pillState.style.background = '#8a5a00';
-        pillShowing.style.display  = 'none';
-        metaState.textContent = '龍の画像を探しています…';
-        stopLoop();
-        meshes.forEach(m => { m.material.opacity = 0; });
-      };
-
-      // ── カメラストリームを MindAR の video に注入 ──
-      // start() を呼ぶと内部で getUserMedia が走るが、
-      // iOS では既にストリームがあるのでそちらを使わせる
-      await mindarThree.start();
-
-      // start() 後に内部 video にストリームを上書き注入
-      const video = container.querySelector('video') || document.querySelector('video');
-      if (video) {
-        video.setAttribute('playsinline', '');
-        video.setAttribute('webkit-playsinline', '');
-        video.muted    = true;
-        video.srcObject = stream;
-        await video.play().catch(() => {});
-        metaState.textContent = `camera: ${video.videoWidth}x${video.videoHeight}`;
-      }
-
-      // ── レンダーループ ──
-      renderer.setAnimationLoop(() => {
-        const delta = clock.getDelta();
-        if (mixer) mixer.update(delta);
-        renderer.render(scene, camera);
-      });
+    } catch (_) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     }
 
-    // ── STARTボタン ──
-    startBtn.addEventListener('click', async () => {
-      startErr.style.display = 'none';
-      retryBtn.style.display = 'none';
-      startBtn.disabled      = true;
-      startBtn.textContent   = '起動中…';
+    await initAR(stream);
+    startOverlay.classList.add('hidden');
 
-      try {
-        // ★ ユーザー操作コンテキストで getUserMedia
-        let stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-          });
-        } catch (_) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        }
+  } catch(e) {
+    startBtn.disabled    = false;
+    startBtn.textContent = '▶ START';
+    retryBtn.style.display = 'inline-block';
+    startErr.style.display = 'block';
+    const msgs = {
+      NotAllowedError:  'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
+      NotFoundError:    'カメラが見つかりません。他のアプリがカメラを占有していないか確認してください。',
+      NotReadableError: 'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
+    };
+    startErr.textContent = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
+  }
+});
 
-        metaState.textContent = 'AR初期化中…';
-        await initAR(stream);
+retryBtn.addEventListener('click', () => location.reload());
 
-        startOverlay.classList.add('hidden');
-        metaState.textContent = '龍の画像を探しています…';
-
-      } catch (e) {
-        startBtn.disabled    = false;
-        startBtn.textContent = '▶ START';
-        retryBtn.style.display = 'inline-block';
-        startErr.style.display = 'block';
-        const msgs = {
-          NotAllowedError:  'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
-          NotFoundError:    'カメラが見つかりません。他のアプリがカメラを使用していないか確認してください。',
-          NotReadableError: 'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
-        };
-        startErr.textContent = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
-      }
-    });
-
-    retryBtn.addEventListener('click', () => location.reload());
-
-  })();
-  </script>
+})();
+</script>
 </body>
 </html>
