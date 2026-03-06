@@ -249,23 +249,47 @@ let stream=null,started=false,isFound=false;
 let foundCount=0,lostCount=0,stepIndex=0,stepTimer=null,frameCount=0;
 
 /* ── BGM ── */
+// iOSはユーザー操作のコールスタック内でのみ Audio.play() が許可される。
+// STARTボタン押下時に一度 play→即pause してオーディオをアンロックし、
+// マーカー検出時に resume する方式で対応。
 let bgmAudio=null;
-function initBGM(){
-  if(bgmAudio)return;
+let bgmUnlocked=false;
+
+function unlockBGM(){
+  // STARTボタンのクリックイベント内（ユーザー操作）で呼ぶ
+  if(bgmUnlocked)return;
   bgmAudio=new Audio('bgm.mp3');
   bgmAudio.loop=true;
   bgmAudio.volume=0.55;
+  // 一瞬再生して即停止 → iOSのオーディオコンテキストを解除
+  const p=bgmAudio.play();
+  if(p!==undefined){
+    p.then(()=>{
+      bgmAudio.pause();
+      bgmAudio.currentTime=0;
+      bgmUnlocked=true;
+    }).catch(()=>{
+      // 失敗しても続行（Android等では問題なし）
+      bgmUnlocked=true;
+    });
+  }else{
+    bgmAudio.pause();
+    bgmAudio.currentTime=0;
+    bgmUnlocked=true;
+  }
 }
+
 function playBGM(){
-  initBGM();
+  if(!bgmAudio)return;
   if(bgmAudio.paused){
     bgmAudio.currentTime=0;
+    bgmAudio.volume=0.55;
     bgmAudio.play().catch(()=>{});
   }
 }
+
 function stopBGM(){
   if(bgmAudio&&!bgmAudio.paused){
-    // フェードアウト
     const fade=setInterval(()=>{
       if(bgmAudio.volume>0.05){bgmAudio.volume=Math.max(0,bgmAudio.volume-0.05);}
       else{bgmAudio.pause();bgmAudio.volume=0.55;clearInterval(fade);}
@@ -309,11 +333,18 @@ function setARVisible(v){
     stopBGM();
   }
 }
-function onMarkerFound(){if(isFound)return;isFound=true;setARVisible(true);startStepLoop();}
+function onMarkerFound(){
+  if(isFound)return;isFound=true;
+  setTimeout(()=>{
+    if(!isFound)return; // 1秒以内に外れたらキャンセル
+    setARVisible(true);startStepLoop();
+  },1000);
+}
 function onMarkerLost(){if(!isFound)return;isFound=false;setARVisible(false);resetDisplay();}
 
 /* ── カメラ ── */
 async function startCamera(){
+  unlockBGM();
   startBtn.disabled=true;retryBtn.style.display='none';errorText.style.display='none';
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw new Error('カメラAPIに対応していません。');
