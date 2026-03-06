@@ -57,7 +57,7 @@
     }
 
     .guide-box {
-      width: min(72vw, 72vh, 360px);
+      width: min(82vw, 82vh, 430px);
       aspect-ratio: 1 / 1;
       border: 3px solid rgba(255,255,255,.92);
       border-radius: 18px;
@@ -78,7 +78,7 @@
     }
 
     .guide-box::after {
-      inset: 30px;
+      inset: 34px;
       border: 1px solid rgba(255,255,255,.18);
     }
 
@@ -241,7 +241,7 @@
     </div>
 
     <div id="debug">初期化待機中...</div>
-    <canvas id="procCanvas" width="160" height="120"></canvas>
+    <canvas id="procCanvas" width="200" height="150"></canvas>
   </div>
 
   <script>
@@ -251,12 +251,12 @@
       const STEP_IMAGES = ['step1.png', 'step2.png', 'step3.png', 'step4.png'];
       const STEP_DURATIONS = [4000, 3000, 3000, 3000];
 
-      const SCAN_W = 160;
-      const SCAN_H = 120;
+      const SCAN_W = 200;
+      const SCAN_H = 150;
 
-      // 誤検出を減らすための連続判定
-      const FOUND_NEED = 5;
-      const LOST_NEED = 8;
+      // 少し遠くても拾いやすくする
+      const FOUND_NEED = 4;
+      const LOST_NEED = 10;
 
       const bgVideo = document.getElementById('bgVideo');
       const stepImg = document.getElementById('stepImg');
@@ -330,7 +330,6 @@
         if (!isFound) return;
 
         const duration = STEP_DURATIONS[stepIndex] || 3000;
-
         stepTimer = setTimeout(() => {
           if (!isFound) return;
           const next = (stepIndex + 1) % STEP_IMAGES.length;
@@ -446,25 +445,18 @@
         }
       }
 
-      // 中央のガイド枠付近だけを対象にして、白背景率・黒文字率・青要素率を判定
-      function analyzeFrame() {
-        if (!bgVideo.videoWidth || !bgVideo.videoHeight) return null;
+      function analyzeWindow(data, sw, sh, rect) {
+        const x0 = Math.max(0, Math.floor(rect.x));
+        const y0 = Math.max(0, Math.floor(rect.y));
+        const rw = Math.min(sw - x0, Math.floor(rect.w));
+        const rh = Math.min(sh - y0, Math.floor(rect.h));
 
-        procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
-        const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
-        const data = imageData.data;
+        if (rw < 20 || rh < 20) return null;
 
-        // ガイド枠に近い中央エリア
-        const x0 = Math.floor(SCAN_W * 0.20);
-        const y0 = Math.floor(SCAN_H * 0.12);
-        const rw = Math.floor(SCAN_W * 0.60);
-        const rh = Math.floor(SCAN_H * 0.76);
-
-        // さらに中央文字っぽい位置
-        const tx0 = Math.floor(SCAN_W * 0.28);
-        const ty0 = Math.floor(SCAN_H * 0.18);
-        const trw = Math.floor(SCAN_W * 0.44);
-        const trh = Math.floor(SCAN_H * 0.58);
+        const tx0 = x0 + Math.floor(rw * 0.18);
+        const ty0 = y0 + Math.floor(rh * 0.15);
+        const trw = Math.floor(rw * 0.64);
+        const trh = Math.floor(rh * 0.60);
 
         let total = 0;
         let whiteCount = 0;
@@ -477,9 +469,11 @@
         let borderTotal = 0;
         let borderBlueCount = 0;
 
+        const borderThickness = Math.max(6, Math.floor(Math.min(rw, rh) * 0.10));
+
         for (let y = y0; y < y0 + rh; y += 2) {
           for (let x = x0; x < x0 + rw; x += 2) {
-            const i = (y * SCAN_W + x) * 4;
+            const i = (y * sw + x) * 4;
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
@@ -487,19 +481,19 @@
 
             total++;
 
-            if (lum > 178) whiteCount++;
-            if (lum < 92) blackCount++;
-            if (b > 95 && b > r + 18 && b > g + 10) blueCount++;
+            if (lum > 168) whiteCount++;
+            if (lum < 105) blackCount++;
+            if (b > 90 && b > r + 12 && b > g + 8) blueCount++;
 
             const nearBorder =
-              (x < x0 + 10) ||
-              (x > x0 + rw - 10) ||
-              (y < y0 + 10) ||
-              (y > y0 + rh - 10);
+              (x < x0 + borderThickness) ||
+              (x > x0 + rw - borderThickness) ||
+              (y < y0 + borderThickness) ||
+              (y > y0 + rh - borderThickness);
 
             if (nearBorder) {
               borderTotal++;
-              if (b > 95 && b > r + 18 && b > g + 10) borderBlueCount++;
+              if (b > 90 && b > r + 12 && b > g + 8) borderBlueCount++;
             }
 
             const inTextArea =
@@ -508,62 +502,60 @@
 
             if (inTextArea) {
               textTotal++;
-              if (lum < 98) textDarkCount++;
+              if (lum < 110) textDarkCount++;
             }
           }
         }
 
         if (total === 0 || textTotal === 0 || borderTotal === 0) return null;
 
-        const whiteRatio = whiteCount / total;
-        const blackRatio = blackCount / total;
-        const blueRatio = blueCount / total;
-        const textDarkRatio = textDarkCount / textTotal;
-        const borderBlueRatio = borderBlueCount / borderTotal;
-
-        // ばらつき対策: 中央以外の暗さ確認
-        let outerDark = 0;
-        let outerTotal = 0;
-
-        for (let y = 0; y < SCAN_H; y += 4) {
-          for (let x = 0; x < SCAN_W; x += 4) {
-            const insideMain =
-              x >= x0 && x < x0 + rw &&
-              y >= y0 && y < y0 + rh;
-
-            if (insideMain) continue;
-
-            const i = (y * SCAN_W + x) * 4;
-            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-
-            outerTotal++;
-            if (lum < 95) outerDark++;
-          }
-        }
-
-        const outerDarkRatio = outerTotal > 0 ? outerDark / outerTotal : 0;
-
         return {
-          whiteRatio,
-          blackRatio,
-          blueRatio,
-          textDarkRatio,
-          borderBlueRatio,
-          outerDarkRatio
+          whiteRatio: whiteCount / total,
+          blackRatio: blackCount / total,
+          blueRatio: blueCount / total,
+          textDarkRatio: textDarkCount / textTotal,
+          borderBlueRatio: borderBlueCount / borderTotal,
+          areaRatio: (rw * rh) / (sw * sh)
         };
       }
 
-      function isMarkerLike(m) {
-        if (!m) return false;
+      function scoreMarker(m) {
+        if (!m) return 0;
 
-        const whiteOk = m.whiteRatio > 0.42 && m.whiteRatio < 0.88;
-        const blackOk = m.blackRatio > 0.05 && m.blackRatio < 0.30;
-        const textOk = m.textDarkRatio > 0.09 && m.textDarkRatio < 0.45;
-        const blueOk = m.blueRatio > 0.008;
-        const borderOk = m.borderBlueRatio > 0.010;
-        const outerOk = m.outerDarkRatio < 0.45;
+        let score = 0;
 
-        return whiteOk && blackOk && textOk && blueOk && borderOk && outerOk;
+        if (m.whiteRatio > 0.32 && m.whiteRatio < 0.92) score += 1;
+        if (m.blackRatio > 0.025 && m.blackRatio < 0.34) score += 1;
+        if (m.textDarkRatio > 0.035 && m.textDarkRatio < 0.48) score += 1;
+        if (m.blueRatio > 0.003) score += 1;
+        if (m.borderBlueRatio > 0.004) score += 1;
+
+        // 遠くて小さく写っても許容
+        if (m.areaRatio > 0.10 && m.areaRatio < 0.72) score += 1;
+
+        return score;
+      }
+
+      function findBestMarker(data, sw, sh) {
+        const windows = [
+          { x: sw * 0.10, y: sh * 0.08, w: sw * 0.80, h: sh * 0.80 }, // 小さめマーカーも拾いやすい
+          { x: sw * 0.18, y: sh * 0.12, w: sw * 0.64, h: sh * 0.72 },
+          { x: sw * 0.24, y: sh * 0.16, w: sw * 0.52, h: sh * 0.62 }
+        ];
+
+        let best = null;
+        let bestScore = -1;
+
+        for (const rect of windows) {
+          const m = analyzeWindow(data, sw, sh, rect);
+          const score = scoreMarker(m);
+          if (score > bestScore) {
+            bestScore = score;
+            best = m;
+          }
+        }
+
+        return { best, bestScore };
       }
 
       function detectLoop() {
@@ -576,20 +568,26 @@
         if (frameCount % 2 !== 0) return;
 
         try {
-          const m = analyzeFrame();
-          if (!m) return;
+          procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
+          const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
+          const data = imageData.data;
 
-          const detected = isMarkerLike(m);
+          const result = findBestMarker(data, SCAN_W, SCAN_H);
+          const m = result.best;
+          const bestScore = result.bestScore;
 
-          if (frameCount % 10 === 0) {
+          const detected = !!m && bestScore >= 5;
+
+          if (frameCount % 10 === 0 && m) {
             setDebug(
               'カメラ起動完了\n' +
+              '判定スコア: ' + bestScore + ' / 6\n' +
               '白背景率: ' + m.whiteRatio.toFixed(3) + '\n' +
               '黒要素率: ' + m.blackRatio.toFixed(3) + '\n' +
               '中央文字率: ' + m.textDarkRatio.toFixed(3) + '\n' +
               '青要素率: ' + m.blueRatio.toFixed(3) + '\n' +
               '外枠青率: ' + m.borderBlueRatio.toFixed(3) + '\n' +
-              '外側暗率: ' + m.outerDarkRatio.toFixed(3) + '\n' +
+              '面積率: ' + m.areaRatio.toFixed(3) + '\n' +
               '現在状態: ' + (isFound ? 'FOUND' : 'WAIT')
             );
           }
@@ -597,15 +595,11 @@
           if (detected) {
             foundCount++;
             lostCount = 0;
-            if (foundCount >= FOUND_NEED) {
-              onMarkerFound();
-            }
+            if (foundCount >= FOUND_NEED) onMarkerFound();
           } else {
             lostCount++;
             foundCount = 0;
-            if (lostCount >= LOST_NEED) {
-              onMarkerLost();
-            }
+            if (lostCount >= LOST_NEED) onMarkerLost();
           }
 
         } catch (err) {
