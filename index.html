@@ -247,6 +247,7 @@ const dots=document.querySelectorAll('.dot');
 
 let stream=null,started=false,isFound=false;
 let foundCount=0,lostCount=0,stepIndex=0,stepTimer=null,frameCount=0;
+let bgm=null;
 
 /* ── BGM ── */
 // iOSはユーザー操作のコールスタック内でのみ Audio.play() が許可される。
@@ -336,11 +337,23 @@ function setARVisible(v){
 function onMarkerFound(){
   if(isFound)return;isFound=true;
   setTimeout(()=>{
-    if(!isFound)return; // 1秒以内に外れたらキャンセル
+    if(!isFound)return; // 2秒以内に外れたらキャンセル
     setARVisible(true);startStepLoop();
-  },1000);
+    // BGM再生
+    if(!bgm){
+      bgm=new Audio('bgm.mp3');
+      bgm.loop=true;
+      bgm.volume=0.55;
+    }
+    bgm.currentTime=0;
+    bgm.play().catch(()=>{});
+  },2000);
 }
-function onMarkerLost(){if(!isFound)return;isFound=false;setARVisible(false);resetDisplay();}
+function onMarkerLost(){
+  if(!isFound)return;isFound=false;setARVisible(false);resetDisplay();
+  // BGM停止
+  if(bgm){bgm.pause();bgm.currentTime=0;}
+}
 
 /* ── カメラ ── */
 async function startCamera(){
