@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <title>Water Dragon AR</title>
+  <title>Water Dragon WebAR</title>
   <style>
     html, body {
       margin: 0;
@@ -27,6 +27,7 @@
       height: 100%;
       object-fit: cover;
       background: #000;
+      z-index: 1;
     }
 
     #stepImg {
@@ -36,13 +37,49 @@
       height: 100%;
       object-fit: contain;
       opacity: 0;
-      transition: opacity .25s ease;
+      transition: opacity .22s ease;
       pointer-events: none;
       z-index: 20;
     }
 
     #stepImg.visible {
       opacity: 1;
+    }
+
+    #guide {
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .guide-box {
+      width: min(72vw, 72vh, 360px);
+      aspect-ratio: 1 / 1;
+      border: 3px solid rgba(255,255,255,.92);
+      border-radius: 18px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.16);
+      position: relative;
+    }
+
+    .guide-box::before,
+    .guide-box::after {
+      content: "";
+      position: absolute;
+      border-radius: 12px;
+    }
+
+    .guide-box::before {
+      inset: 12px;
+      border: 2px dashed rgba(255,255,255,.28);
+    }
+
+    .guide-box::after {
+      inset: 30px;
+      border: 1px solid rgba(255,255,255,.18);
     }
 
     #overlay {
@@ -52,10 +89,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background:
-        linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,.65));
       padding: 24px;
       box-sizing: border-box;
+      background: linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,.68));
     }
 
     #overlay.hidden {
@@ -63,9 +99,9 @@
     }
 
     .panel {
-      width: min(92vw, 520px);
+      width: min(92vw, 540px);
       border-radius: 18px;
-      background: rgba(17,17,17,.88);
+      background: rgba(17,17,17,.90);
       border: 1px solid rgba(255,255,255,.16);
       box-shadow: 0 12px 32px rgba(0,0,0,.35);
       color: #fff;
@@ -107,7 +143,7 @@
 
     #retryBtn {
       margin-top: 12px;
-      background: #555;
+      background: #5a5a5a;
       display: none;
     }
 
@@ -117,7 +153,7 @@
       text-align: left;
       font-size: 13px;
       line-height: 1.6;
-      color: #ffd2d2;
+      color: #ffd0d0;
       display: none;
     }
 
@@ -125,7 +161,6 @@
       position: absolute;
       left: 12px;
       right: 12px;
-      top: env(safe-area-inset-top, 0);
       top: max(12px, env(safe-area-inset-top));
       z-index: 50;
       display: flex;
@@ -155,41 +190,13 @@
       background: rgba(11,79,154,.88);
     }
 
-    #guide {
-      position: absolute;
-      inset: 0;
-      z-index: 15;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .guide-box {
-      width: min(72vw, 72vh, 360px);
-      aspect-ratio: 1 / 1;
-      border: 3px solid rgba(255,255,255,.85);
-      border-radius: 18px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.18);
-      position: relative;
-    }
-
-    .guide-box::before,
-    .guide-box::after {
-      content: "";
-      position: absolute;
-      inset: 12px;
-      border: 2px dashed rgba(255,255,255,.28);
-      border-radius: 12px;
-    }
-
     #debug {
       position: absolute;
       left: 12px;
       right: 12px;
       bottom: max(12px, env(safe-area-inset-bottom));
       z-index: 55;
-      background: rgba(0,0,0,.48);
+      background: rgba(0,0,0,.50);
       color: #d7ecff;
       border: 1px solid rgba(255,255,255,.14);
       border-radius: 14px;
@@ -208,7 +215,7 @@
 <body>
   <div id="app">
     <video id="bgVideo" playsinline webkit-playsinline muted></video>
-    <img id="stepImg" alt="AR step content">
+    <img id="stepImg" alt="AR content">
 
     <div id="guide">
       <div class="guide-box"></div>
@@ -224,7 +231,7 @@
         <h1>ARを開始します</h1>
         <p>
           カメラ権限を許可して、<br>
-          マーカー画像「①.png」を枠の中に入れてください。<br>
+          マーカー画像「①.png」を中央の枠に入れてください。<br>
           認識後、Step1→Step2→Step3→Step4 をループ表示します。
         </p>
         <button id="startBtn" class="btn">START</button>
@@ -244,6 +251,13 @@
       const STEP_IMAGES = ['step1.png', 'step2.png', 'step3.png', 'step4.png'];
       const STEP_DURATIONS = [4000, 3000, 3000, 3000];
 
+      const SCAN_W = 160;
+      const SCAN_H = 120;
+
+      // 誤検出を減らすための連続判定
+      const FOUND_NEED = 5;
+      const LOST_NEED = 8;
+
       const bgVideo = document.getElementById('bgVideo');
       const stepImg = document.getElementById('stepImg');
       const overlay = document.getElementById('overlay');
@@ -253,18 +267,19 @@
       const debug = document.getElementById('debug');
       const procCanvas = document.getElementById('procCanvas');
       const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
       const statePill = document.getElementById('statePill');
       const showPill = document.getElementById('showPill');
       const showNum = document.getElementById('showNum');
 
-      const SCAN_W = 160;
-      const SCAN_H = 120;
-
       let stream = null;
+      let started = false;
+      let isFound = false;
+      let foundCount = 0;
+      let lostCount = 0;
       let stepIndex = 0;
       let stepTimer = null;
-      let isFound = false;
-      let started = false;
+      let frameCount = 0;
 
       function setDebug(msg) {
         debug.textContent = msg;
@@ -295,8 +310,8 @@
         stepIndex = i;
         showNum.textContent = String(i + 1);
         showPill.style.display = 'inline-flex';
-
         stepImg.classList.remove('visible');
+
         setTimeout(() => {
           stepImg.src = STEP_IMAGES[i];
           stepImg.classList.add('visible');
@@ -315,6 +330,7 @@
         if (!isFound) return;
 
         const duration = STEP_DURATIONS[stepIndex] || 3000;
+
         stepTimer = setTimeout(() => {
           if (!isFound) return;
           const next = (stepIndex + 1) % STEP_IMAGES.length;
@@ -404,8 +420,10 @@
 
           overlay.classList.add('hidden');
           started = true;
-          setDebug('カメラ起動完了。マーカー待機中...');
+          foundCount = 0;
+          lostCount = 0;
           setState(false);
+          setDebug('カメラ起動完了。マーカー待機中...');
         } catch (err) {
           console.error(err);
           errorText.style.display = 'block';
@@ -414,7 +432,7 @@
             '・Safari / Chrome で開いているか\n' +
             '・GitHub Pages の URL で開いているか\n' +
             '・カメラ権限を許可しているか\n\n' +
-            '詳細: ' + (err && err.message ? err.message : err);
+            '詳細: ' + (err && err.message ? err.message : String(err));
           retryBtn.style.display = 'inline-block';
           startBtn.disabled = false;
           setDebug('カメラ起動失敗');
@@ -428,30 +446,124 @@
         }
       }
 
-      function calcFrameFeature() {
+      // 中央のガイド枠付近だけを対象にして、白背景率・黒文字率・青要素率を判定
+      function analyzeFrame() {
         if (!bgVideo.videoWidth || !bgVideo.videoHeight) return null;
 
         procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
-        const img = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
-        const data = img.data;
+        const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
+        const data = imageData.data;
 
-        let darkCount = 0;
+        // ガイド枠に近い中央エリア
+        const x0 = Math.floor(SCAN_W * 0.20);
+        const y0 = Math.floor(SCAN_H * 0.12);
+        const rw = Math.floor(SCAN_W * 0.60);
+        const rh = Math.floor(SCAN_H * 0.76);
+
+        // さらに中央文字っぽい位置
+        const tx0 = Math.floor(SCAN_W * 0.28);
+        const ty0 = Math.floor(SCAN_H * 0.18);
+        const trw = Math.floor(SCAN_W * 0.44);
+        const trh = Math.floor(SCAN_H * 0.58);
+
         let total = 0;
+        let whiteCount = 0;
+        let blackCount = 0;
+        let blueCount = 0;
 
-        for (let y = 0; y < SCAN_H; y += 2) {
-          for (let x = 0; x < SCAN_W; x += 2) {
+        let textTotal = 0;
+        let textDarkCount = 0;
+
+        let borderTotal = 0;
+        let borderBlueCount = 0;
+
+        for (let y = y0; y < y0 + rh; y += 2) {
+          for (let x = x0; x < x0 + rw; x += 2) {
             const i = (y * SCAN_W + x) * 4;
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
             total++;
-            if (lum < 115) darkCount++;
+
+            if (lum > 178) whiteCount++;
+            if (lum < 92) blackCount++;
+            if (b > 95 && b > r + 18 && b > g + 10) blueCount++;
+
+            const nearBorder =
+              (x < x0 + 10) ||
+              (x > x0 + rw - 10) ||
+              (y < y0 + 10) ||
+              (y > y0 + rh - 10);
+
+            if (nearBorder) {
+              borderTotal++;
+              if (b > 95 && b > r + 18 && b > g + 10) borderBlueCount++;
+            }
+
+            const inTextArea =
+              x >= tx0 && x < tx0 + trw &&
+              y >= ty0 && y < ty0 + trh;
+
+            if (inTextArea) {
+              textTotal++;
+              if (lum < 98) textDarkCount++;
+            }
           }
         }
 
-        const darkRatio = total > 0 ? darkCount / total : 0;
-        return { darkRatio };
+        if (total === 0 || textTotal === 0 || borderTotal === 0) return null;
+
+        const whiteRatio = whiteCount / total;
+        const blackRatio = blackCount / total;
+        const blueRatio = blueCount / total;
+        const textDarkRatio = textDarkCount / textTotal;
+        const borderBlueRatio = borderBlueCount / borderTotal;
+
+        // ばらつき対策: 中央以外の暗さ確認
+        let outerDark = 0;
+        let outerTotal = 0;
+
+        for (let y = 0; y < SCAN_H; y += 4) {
+          for (let x = 0; x < SCAN_W; x += 4) {
+            const insideMain =
+              x >= x0 && x < x0 + rw &&
+              y >= y0 && y < y0 + rh;
+
+            if (insideMain) continue;
+
+            const i = (y * SCAN_W + x) * 4;
+            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+
+            outerTotal++;
+            if (lum < 95) outerDark++;
+          }
+        }
+
+        const outerDarkRatio = outerTotal > 0 ? outerDark / outerTotal : 0;
+
+        return {
+          whiteRatio,
+          blackRatio,
+          blueRatio,
+          textDarkRatio,
+          borderBlueRatio,
+          outerDarkRatio
+        };
+      }
+
+      function isMarkerLike(m) {
+        if (!m) return false;
+
+        const whiteOk = m.whiteRatio > 0.42 && m.whiteRatio < 0.88;
+        const blackOk = m.blackRatio > 0.05 && m.blackRatio < 0.30;
+        const textOk = m.textDarkRatio > 0.09 && m.textDarkRatio < 0.45;
+        const blueOk = m.blueRatio > 0.008;
+        const borderOk = m.borderBlueRatio > 0.010;
+        const outerOk = m.outerDarkRatio < 0.45;
+
+        return whiteOk && blackOk && textOk && blueOk && borderOk && outerOk;
       }
 
       function detectLoop() {
@@ -460,24 +572,42 @@
         if (!started) return;
         if (!bgVideo.videoWidth) return;
 
+        frameCount++;
+        if (frameCount % 2 !== 0) return;
+
         try {
-          const result = calcFrameFeature();
-          if (!result) return;
+          const m = analyzeFrame();
+          if (!m) return;
 
-          const darkRatio = result.darkRatio;
+          const detected = isMarkerLike(m);
 
-          setDebug(
-            'カメラ起動完了\n' +
-            '暗部比率: ' + darkRatio.toFixed(3) + '\n' +
-            '目安: 0.12〜0.55 付近で認識しやすいです\n' +
-            '現在状態: ' + (isFound ? 'FOUND' : 'WAIT')
-          );
-
-          if (darkRatio > 0.12 && darkRatio < 0.55) {
-            onMarkerFound();
-          } else {
-            onMarkerLost();
+          if (frameCount % 10 === 0) {
+            setDebug(
+              'カメラ起動完了\n' +
+              '白背景率: ' + m.whiteRatio.toFixed(3) + '\n' +
+              '黒要素率: ' + m.blackRatio.toFixed(3) + '\n' +
+              '中央文字率: ' + m.textDarkRatio.toFixed(3) + '\n' +
+              '青要素率: ' + m.blueRatio.toFixed(3) + '\n' +
+              '外枠青率: ' + m.borderBlueRatio.toFixed(3) + '\n' +
+              '外側暗率: ' + m.outerDarkRatio.toFixed(3) + '\n' +
+              '現在状態: ' + (isFound ? 'FOUND' : 'WAIT')
+            );
           }
+
+          if (detected) {
+            foundCount++;
+            lostCount = 0;
+            if (foundCount >= FOUND_NEED) {
+              onMarkerFound();
+            }
+          } else {
+            lostCount++;
+            foundCount = 0;
+            if (lostCount >= LOST_NEED) {
+              onMarkerLost();
+            }
+          }
+
         } catch (err) {
           console.error(err);
           setDebug('検出処理エラー: ' + err.message);
@@ -489,6 +619,7 @@
       window.addEventListener('beforeunload', stopCamera);
 
       preloadImages();
+      setState(false);
       setDebug('開始画面表示OK。START を押してください。');
       detectLoop();
     })();
