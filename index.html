@@ -8,40 +8,29 @@
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{width:100%;height:100%;overflow:hidden;background:#000;
       font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
-
-    #bgVideo{
-      position:fixed;inset:0;width:100%;height:100%;
-      object-fit:cover;z-index:0;
-    }
-    /* 処理用canvas（非表示） */
-    #procCanvas{ display:none; }
-
+    #bgVideo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+    #procCanvas{display:none}
     #stepImg{
-      position:fixed;
-      top:50%;left:50%;
+      position:fixed;top:50%;left:50%;
       transform:translate(-50%,-50%);
       max-width:75vw;max-height:75vh;
       border-radius:14px;
       box-shadow:0 0 40px rgba(0,0,0,.8);
-      z-index:5;
-      opacity:0;
+      z-index:5;opacity:0;
       transition:opacity 0.5s ease;
       pointer-events:none;
     }
     #stepImg.visible{opacity:1}
-
     #hud{
       position:fixed;
       top:env(safe-area-inset-top);
       left:env(safe-area-inset-left);
       right:env(safe-area-inset-right);
-      padding:12px;z-index:10;
-      pointer-events:none;color:#fff;
+      padding:12px;z-index:10;pointer-events:none;color:#fff;
     }
     #panel{
       display:inline-block;max-width:92vw;
-      background:rgba(0,0,0,.55);
-      border-radius:14px;padding:12px 14px;
+      background:rgba(0,0,0,.55);border-radius:14px;padding:12px 14px;
     }
     #panelTitle{font-weight:800;font-size:18px;margin-bottom:6px}
     #panelDesc{font-size:14px;line-height:1.5;opacity:.95;margin-bottom:8px}
@@ -50,24 +39,17 @@
     #pillState{background:#8a5a00}
     #pillShowing{background:#0b6b3a;display:none}
     #metaRow{margin-top:6px;font-size:12px;opacity:.85}
-
     #guideWrap{
-      position:fixed;inset:0;
-      display:flex;align-items:center;justify-content:center;
+      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
       z-index:9;pointer-events:none;
     }
-    #guide{
-      width:min(84vw,500px);aspect-ratio:1/1;
-      border:4px dashed rgba(255,255,255,.75);border-radius:22px;
-    }
+    #guide{width:min(84vw,500px);aspect-ratio:1/1;border:4px dashed rgba(255,255,255,.75);border-radius:22px}
     #guideHint{
       position:fixed;left:50%;transform:translateX(-50%);
       bottom:calc(env(safe-area-inset-bottom) + 18px);
       z-index:9;color:#fff;background:rgba(0,0,0,.45);
-      padding:8px 12px;border-radius:999px;
-      font-size:12px;white-space:nowrap;pointer-events:none;
+      padding:8px 12px;border-radius:999px;font-size:12px;white-space:nowrap;pointer-events:none;
     }
-
     #startOverlay{
       position:fixed;inset:0;z-index:20;
       display:flex;align-items:center;justify-content:center;
@@ -75,37 +57,27 @@
     }
     #startOverlay.hidden{display:none}
     #startCard{
-      width:min(92vw,520px);
-      background:rgba(20,20,20,.92);
+      width:min(92vw,520px);background:rgba(20,20,20,.92);
       border:1px solid rgba(255,255,255,.18);
       border-radius:16px;padding:20px 18px;text-align:center;
     }
     #startCard h2{font-size:18px;margin-bottom:10px}
     #startCard p{font-size:13px;opacity:.9;line-height:1.7;margin-bottom:16px}
     #startBtn{
-      appearance:none;border:none;
-      padding:14px 32px;border-radius:12px;
-      font-weight:900;font-size:17px;
-      background:#0b4f9a;color:#fff;
+      appearance:none;border:none;padding:14px 32px;border-radius:12px;
+      font-weight:900;font-size:17px;background:#0b4f9a;color:#fff;
       cursor:pointer;touch-action:manipulation;
     }
     #startBtn:disabled{background:#444}
-    #startErr{
-      margin-top:14px;font-size:12px;color:#ffb3b3;
-      white-space:pre-wrap;text-align:left;display:none;
-    }
+    #startErr{margin-top:14px;font-size:12px;color:#ffb3b3;white-space:pre-wrap;text-align:left;display:none}
     #retryBtn{
-      display:none;margin-top:10px;
-      appearance:none;border:none;
-      padding:10px 18px;border-radius:10px;
-      font-weight:800;font-size:14px;
-      background:#555;color:#fff;
-      cursor:pointer;touch-action:manipulation;
+      display:none;margin-top:10px;appearance:none;border:none;
+      padding:10px 18px;border-radius:10px;font-weight:800;font-size:14px;
+      background:#555;color:#fff;cursor:pointer;touch-action:manipulation;
     }
   </style>
 </head>
 <body>
-
 <video id="bgVideo" playsinline webkit-playsinline muted autoplay></video>
 <canvas id="procCanvas"></canvas>
 <img id="stepImg" src="" alt=""/>
@@ -121,7 +93,6 @@
     <div id="metaRow"><span id="metaCam">camera: -</span></div>
   </div>
 </div>
-
 <div id="guideWrap"><div id="guide"></div></div>
 <div id="guideHint">※ マーカーをできるだけ大きく、ピントが合う距離で</div>
 
@@ -145,17 +116,20 @@
 'use strict';
 
 // ═══════════════════════════════════════════════
-//  マーカーパターンデータ（外部ファイル不要・ここに埋め込み済み）
-//  dragon marker を 16x16 に縮小した2値データ（4方向分）
-//  黒=1, 白=0
+//  マーカーパターンデータ（3閾値×4方向 = 12パターン）
+//  PC画面・印刷物・明暗変化に対応
 // ═══════════════════════════════════════════════
-const MARKER_PATTERNS = [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]];
-
-// マーカーの黒ピクセル数（照合の足切りに使う）
-const PATTERN_BLACK_COUNT = 70;
+const MARKER_PATTERNS = [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,0,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,1,0,0,0,0,0,0,1,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,0,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,1,1,0,0,0,0,0,0,1,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,0,1,0,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]];
 
 const STEP_IMAGES   = ['step1.png','step2.png','step3.png'];
 const STEP_INTERVAL = 3000;
+
+// ── 検出パラメータ（緩め設定） ──
+const SCAN_W     = 160;
+const SCAN_H     = 120;
+const MATCH_THR  = 55;   // ハミング距離許容値（256bit中 / 緩め）
+const FOUND_NEED = 2;    // 連続N回で FOUND 確定
+const LOST_NEED  = 12;   // 連続N回で LOST 確定
 
 const bgVideo      = document.getElementById('bgVideo');
 const procCanvas   = document.getElementById('procCanvas');
@@ -169,238 +143,189 @@ const pillShowing  = document.getElementById('pillShowing');
 const showingNum   = document.getElementById('showingNum');
 const metaCam      = document.getElementById('metaCam');
 
-let stepIndex   = 0;
-let stepTimer   = null;
-let isFound     = false;
-let rafId       = null;
-let procCtx     = null;
+let stepIndex = 0, stepTimer = null, isFound = false;
+let foundCount = 0, lostCount = 0;
+let procCtx = null;
 
-// ─────────────────────────────────────────────
-//  ステップ表示
-// ─────────────────────────────────────────────
-function showStep(i) {
+function showStep(i){
   stepIndex = i;
-  showingNum.textContent = String(i + 1);
+  showingNum.textContent = String(i+1);
   pillShowing.style.display = 'inline-block';
   stepImg.classList.remove('visible');
-  setTimeout(() => {
-    stepImg.src = STEP_IMAGES[i];
-    stepImg.classList.add('visible');
-  }, 60);
+  setTimeout(()=>{ stepImg.src = STEP_IMAGES[i]; stepImg.classList.add('visible'); }, 60);
 }
-function startStepLoop() {
-  stopStepLoop();
-  showStep(0);
-  stepTimer = setInterval(() => {
-    if (isFound) showStep((stepIndex + 1) % STEP_IMAGES.length);
-  }, STEP_INTERVAL);
+function startStepLoop(){
+  stopStepLoop(); showStep(0);
+  stepTimer = setInterval(()=>{ if(isFound) showStep((stepIndex+1)%STEP_IMAGES.length); }, STEP_INTERVAL);
 }
-function stopStepLoop() {
-  if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
-}
-function onMarkerFound() {
-  if (isFound) return;
+function stopStepLoop(){ if(stepTimer){ clearInterval(stepTimer); stepTimer=null; } }
+function onMarkerFound(){
+  if(isFound) return;
   isFound = true;
-  pillState.textContent = 'FOUND';
-  pillState.style.background = '#0b4f9a';
+  pillState.textContent = 'FOUND'; pillState.style.background = '#0b4f9a';
   startStepLoop();
 }
-function onMarkerLost() {
-  if (!isFound) return;
+function onMarkerLost(){
+  if(!isFound) return;
   isFound = false;
-  pillState.textContent = 'WAIT';
-  pillState.style.background = '#8a5a00';
+  pillState.textContent = 'WAIT'; pillState.style.background = '#8a5a00';
   pillShowing.style.display = 'none';
   stepImg.classList.remove('visible');
   stopStepLoop();
 }
 
-// ─────────────────────────────────────────────
-//  パターン照合（ハミング距離）
-// ─────────────────────────────────────────────
-function hammingDistance(a, b) {
-  let d = 0;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
-  return d;
-}
-
-function matchPattern(sample) {
-  // 4方向のうち最小距離を返す
-  let minDist = Infinity;
-  for (const pat of MARKER_PATTERNS) {
-    const d = hammingDistance(sample, pat);
-    if (d < minDist) minDist = d;
+// ── パターン照合（ハミング距離・最小値を返す） ──
+function matchPattern(sample){
+  let minD = 256;
+  for(const pat of MARKER_PATTERNS){
+    let d = 0;
+    for(let i=0; i<256; i++) if(sample[i]!==pat[i]) d++;
+    if(d < minD) minD = d;
   }
-  return minDist;
+  return minD;
 }
 
-// ─────────────────────────────────────────────
-//  画像から黒い正方形領域を探してパターン照合
-// ─────────────────────────────────────────────
-const SCAN_W    = 160;  // 処理用縮小サイズ
-const SCAN_H    = 120;
-const THRESHOLD = 100;  // 2値化閾値（0-255）
-const MATCH_THR = 40;   // ハミング距離の許容値（256bit中）
-const BORDER_RATIO = 0.10; // 黒枠の最小割合
+// ── 適応的閾値で2値化（明暗変化に強い） ──
+function adaptiveBinarize(gray, w, h){
+  const bin = new Uint8Array(w*h);
+  // 画像全体の平均輝度を計算
+  let sum = 0;
+  for(let i=0; i<gray.length; i++) sum += gray[i];
+  const mean = sum / gray.length;
+  // 平均より暗い = 黒(0)、明るい = 白(255)
+  const thr = mean * 0.85; // 平均の85%を閾値に
+  for(let i=0; i<gray.length; i++) bin[i] = gray[i] < thr ? 0 : 255;
+  return bin;
+}
 
-// 連続検出/非検出カウンタ（チラつき防止）
-let foundCount  = 0;
-let lostCount   = 0;
-const FOUND_NEED = 3;
-const LOST_NEED  = 8;
+// ── メイン検出ループ ──
+function detectMarker(){
+  requestAnimationFrame(detectMarker);
 
-function detectMarker() {
-  rafId = requestAnimationFrame(detectMarker);
-
-  // 縮小してcanvasに描画
   procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
-  const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
-  const data = imageData.data;
+  const data = procCtx.getImageData(0, 0, SCAN_W, SCAN_H).data;
 
-  // グレースケール + 2値化
+  // グレースケール変換
   const gray = new Uint8Array(SCAN_W * SCAN_H);
-  for (let i = 0; i < gray.length; i++) {
-    const r = data[i*4], g = data[i*4+1], b = data[i*4+2];
-    gray[i] = (0.299*r + 0.587*g + 0.114*b) < THRESHOLD ? 0 : 255;
+  for(let i=0; i<gray.length; i++){
+    gray[i] = (0.299*data[i*4] + 0.587*data[i*4+1] + 0.114*data[i*4+2]) | 0;
   }
 
-  // ──────────────────────────────────────────
-  //  黒い正方形領域の検出（ランレングス走査）
-  //  画面を縦横にスキャンして黒いブロックを探す
-  // ──────────────────────────────────────────
+  // 適応的2値化
+  const bin = adaptiveBinarize(gray, SCAN_W, SCAN_H);
+
   let markerDetected = false;
 
-  // スキャン間隔（全ピクセルは重いので間引く）
-  const STEP = 4;
+  // ガイド枠の中央付近を重点的にスキャン
+  const cx = SCAN_W / 2, cy = SCAN_H / 2;
+  const searchRadiusX = SCAN_W * 0.45;
+  const searchRadiusY = SCAN_H * 0.45;
 
-  for (let ty = STEP; ty < SCAN_H - STEP && !markerDetected; ty += STEP) {
-    for (let tx = STEP; tx < SCAN_W - STEP && !markerDetected; tx += STEP) {
+  const STEP = 3;
+  outer:
+  for(let ty = Math.floor(cy - searchRadiusY); ty < cy + searchRadiusY; ty += STEP){
+    for(let tx = Math.floor(cx - searchRadiusX); tx < cx + searchRadiusX; tx += STEP){
+      if(ty<0||ty>=SCAN_H||tx<0||tx>=SCAN_W) continue;
 
       // 黒ピクセルからスタート
-      if (gray[ty * SCAN_W + tx] !== 0) continue;
+      if(bin[ty*SCAN_W+tx] !== 0) continue;
 
-      // 右方向に黒が続く幅を計測
+      // 右方向の黒の幅を計測
       let bw = 0;
-      for (let x = tx; x < SCAN_W && gray[ty * SCAN_W + x] === 0; x++) bw++;
-      if (bw < 8) continue;  // 小さすぎる
+      for(let x=tx; x<Math.min(tx+80,SCAN_W) && bin[ty*SCAN_W+x]===0; x++) bw++;
+      if(bw < 10 || bw > 90) continue;
 
-      // 下方向に黒が続く高さを計測
+      // 下方向の黒の高さを計測
       let bh = 0;
-      for (let y = ty; y < SCAN_H && gray[y * SCAN_W + tx] === 0; y++) bh++;
-      if (bh < 8) continue;
+      for(let y=ty; y<Math.min(ty+80,SCAN_H) && bin[y*SCAN_W+tx]===0; y++) bh++;
+      if(bh < 10 || bh > 90) continue;
 
-      // ある程度正方形か確認（縦横比 0.5〜2.0）
+      // 縦横比チェック（正方形に近いもの）
       const aspect = bw / bh;
-      if (aspect < 0.4 || aspect > 2.5) continue;
+      if(aspect < 0.35 || aspect > 2.8) continue;
 
-      // 黒枠の内側領域を推定
-      const innerSize = Math.min(bw, bh);
-      if (innerSize < 12) continue;
+      const sz = Math.min(bw, bh);
+      if(sz < 12) continue;
 
-      const border = Math.max(2, Math.floor(innerSize * BORDER_RATIO));
-      const ix = tx + border;
-      const iy = ty + border;
-      const iw = innerSize - border * 2;
-      const ih = innerSize - border * 2;
-      if (iw < 8 || ih < 8) continue;
+      // 内側をサンプリング
+      const borderPx = Math.max(2, Math.floor(sz * 0.12));
+      const ix = tx + borderPx, iy = ty + borderPx;
+      const iw = sz - borderPx*2, ih = sz - borderPx*2;
+      if(iw < 8 || ih < 8) continue;
 
-      // 内側を 16×16 にサンプリング
+      // 16×16 サンプリング
       const sample = new Array(256);
-      for (let sy = 0; sy < 16; sy++) {
-        for (let sx = 0; sx < 16; sx++) {
-          const px = ix + Math.floor(sx * iw / 16);
-          const py = iy + Math.floor(sy * ih / 16);
-          if (px >= SCAN_W || py >= SCAN_H) { sample[sy*16+sx] = 0; continue; }
-          sample[sy*16+sx] = gray[py * SCAN_W + px] === 0 ? 1 : 0;
+      for(let sy=0; sy<16; sy++){
+        for(let sx=0; sx<16; sx++){
+          const px = ix + Math.floor(sx*iw/16);
+          const py = iy + Math.floor(sy*ih/16);
+          if(px>=SCAN_W||py>=SCAN_H){ sample[sy*16+sx]=0; continue; }
+          sample[sy*16+sx] = bin[py*SCAN_W+px]===0 ? 1 : 0;
         }
       }
 
-      // 黒ピクセル数の足切り（極端に少ない/多いものは除外）
-      const blackCount = sample.reduce((a,b) => a+b, 0);
-      if (blackCount < 10 || blackCount > 200) continue;
+      // 黒ピクセル数の足切り
+      const bc = sample.reduce((a,b)=>a+b,0);
+      if(bc < 8 || bc > 220) continue;
 
       // パターン照合
       const dist = matchPattern(sample);
-      if (dist <= MATCH_THR) {
+      if(dist <= MATCH_THR){
         markerDetected = true;
+        break outer;
       }
     }
   }
 
-  // ──────────────────────────────────────────
-  //  チラつき防止：連続N回で確定
-  // ──────────────────────────────────────────
-  if (markerDetected) {
-    foundCount++;
-    lostCount = 0;
-    if (foundCount >= FOUND_NEED) onMarkerFound();
+  // チラつき防止
+  if(markerDetected){
+    foundCount++; lostCount = 0;
+    if(foundCount >= FOUND_NEED) onMarkerFound();
   } else {
-    lostCount++;
-    foundCount = 0;
-    if (lostCount >= LOST_NEED) onMarkerLost();
+    lostCount++; foundCount = 0;
+    if(lostCount >= LOST_NEED) onMarkerLost();
   }
 }
 
-// ─────────────────────────────────────────────
-//  起動処理
-// ─────────────────────────────────────────────
-async function startAR(stream) {
+// ── 起動処理 ──
+async function startAR(stream){
   bgVideo.srcObject = stream;
-  bgVideo.muted     = true;
+  bgVideo.muted = true;
   await bgVideo.play();
-
-  await new Promise(resolve => {
-    if (bgVideo.videoWidth) { resolve(); return; }
-    bgVideo.addEventListener('loadedmetadata', resolve, { once: true });
-  });
-
+  await new Promise(r=>{ if(bgVideo.videoWidth){r();return;} bgVideo.addEventListener('loadedmetadata',r,{once:true}); });
   metaCam.textContent = `camera: OK (${bgVideo.videoWidth}x${bgVideo.videoHeight})`;
-
-  procCanvas.width  = SCAN_W;
-  procCanvas.height = SCAN_H;
-  procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
-
+  procCanvas.width = SCAN_W; procCanvas.height = SCAN_H;
+  procCtx = procCanvas.getContext('2d',{willReadFrequently:true});
   detectMarker();
 }
 
-// ─────────────────────────────────────────────
-//  STARTボタン
-// ─────────────────────────────────────────────
-startBtn.addEventListener('click', async () => {
-  startErr.style.display = 'none';
-  retryBtn.style.display = 'none';
-  startBtn.disabled      = true;
-  startBtn.textContent   = '起動中…';
-
-  try {
+startBtn.addEventListener('click', async ()=>{
+  startErr.style.display='none'; retryBtn.style.display='none';
+  startBtn.disabled=true; startBtn.textContent='起動中…';
+  try{
     let stream;
-    try {
+    try{
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
+        video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false
       });
-    } catch (_) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }catch(_){
+      stream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
     }
-
     await startAR(stream);
     startOverlay.classList.add('hidden');
-
-  } catch(e) {
-    startBtn.disabled    = false;
-    startBtn.textContent = '▶ START';
-    retryBtn.style.display = 'inline-block';
-    startErr.style.display = 'block';
-    const msgs = {
-      NotAllowedError:  'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
-      NotFoundError:    'カメラが見つかりません。他のアプリがカメラを占有していないか確認してください。',
-      NotReadableError: 'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
+  }catch(e){
+    startBtn.disabled=false; startBtn.textContent='▶ START';
+    retryBtn.style.display='inline-block'; startErr.style.display='block';
+    const msgs={
+      NotAllowedError:'カメラの使用が拒否されました。\n「設定」→「Safari」→「カメラ」を「許可」にして再読み込みしてください。',
+      NotFoundError:'カメラが見つかりません。他のアプリがカメラを占有していないか確認してください。',
+      NotReadableError:'カメラにアクセスできません。Safariを完全に終了して再度お試しください。',
     };
-    startErr.textContent = msgs[e.name] || ('エラー: ' + (e.message || String(e)));
+    startErr.textContent = msgs[e.name]||('エラー: '+(e.message||String(e)));
   }
 });
 
-retryBtn.addEventListener('click', () => location.reload());
+retryBtn.addEventListener('click',()=>location.reload());
 
 })();
 </script>
