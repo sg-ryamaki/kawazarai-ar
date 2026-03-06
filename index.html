@@ -327,11 +327,9 @@ function setARVisible(v){
     summonFlash.classList.remove('flash');
     void summonFlash.offsetWidth;
     summonFlash.classList.add('flash');
-    playBGM();
   }else{
     arStage.classList.remove('active');
     guide.classList.remove('guide-hidden');
-    stopBGM();
   }
 }
 function onMarkerFound(){
@@ -354,13 +352,13 @@ function onMarkerLost(){
   setTimeout(()=>{
     if(isFound)return; // 2秒以内に再認識したらキャンセル
     setARVisible(false);resetDisplay();
+    // BGM停止
     if(bgm){bgm.pause();bgm.currentTime=0;}
   },2000);
 }
 
 /* ── カメラ ── */
 async function startCamera(){
-  unlockBGM();
   startBtn.disabled=true;retryBtn.style.display='none';errorText.style.display='none';
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw new Error('カメラAPIに対応していません。');
