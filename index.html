@@ -1,318 +1,80 @@
-<script>
-(function(){
-'use strict';
-
-// ═══════════════════════════════════════════════════════
-//  32×32 高解像度マーカー特徴量（4方向）
-//  ※ ここは今の index.html に入っている MARKER_FEATURES をそのまま残してください
-// ═══════════════════════════════════════════════════════
-const MARKER_FEATURES = [
-  /* ここは現在の長い配列をそのまま残す */
-];
-
-// ── コサイン類似度 ──
-function cosineSim(a,b){
-  let dot=0,na=0,nb=0;
-  for(let i=0;i<a.length;i++){
-    dot+=a[i]*b[i];
-    na+=a[i]*a[i];
-    nb+=b[i]*b[i];
-  }
-  return dot/(Math.sqrt(na)*Math.sqrt(nb)+1e-9);
-}
-
-// ── 32×32グリッドで特徴量抽出 ──
-function extractFeature(data,sw,sh){
-  const m=0.10, x0=Math.floor(sw*m), y0=Math.floor(sh*m);
-  const rw=sw-x0*2, rh=sh-y0*2;
-  const zones=new Float32Array(1024);
-
-  for(let zy=0;zy<32;zy++){
-    for(let zx=0;zx<32;zx++){
-      const px0=x0+Math.floor(zx*rw/32), py0=y0+Math.floor(zy*rh/32);
-      const px1=x0+Math.floor((zx+1)*rw/32), py1=y0+Math.floor((zy+1)*rh/32);
-
-      let sum=0,cnt=0;
-      for(let y=py0;y<py1;y+=2){
-        for(let x=px0;x<px1;x+=2){
-          const i=(y*sw+x)*4;
-          sum+=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
-          cnt++;
-        }
-      }
-      zones[zy*32+zx]=cnt>0?sum/cnt/255:0;
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>AR debug</title>
+  <style>
+    html,body{
+      margin:0;
+      width:100%;
+      height:100%;
+      background:#000;
+      color:#fff;
+      font-family:sans-serif;
     }
-  }
-
-  let mn=1,mx=0;
-  for(let i=0;i<1024;i++){
-    if(zones[i]<mn) mn=zones[i];
-    if(zones[i]>mx) mx=zones[i];
-  }
-
-  const rng=mx-mn+1e-9;
-  const norm=new Float32Array(1024);
-  for(let i=0;i<1024;i++) norm[i]=(zones[i]-mn)/rng;
-
-  return norm;
-}
-
-// ── 追加検証：暗領域の分布チェック ──
-function verifyDarkDistribution(data,sw,sh){
-  const m=0.10, x0=Math.floor(sw*m), y0=Math.floor(sh*m);
-  const rw=sw-x0*2, rh=sh-y0*2;
-  const THR=100;
-  let topDark=0,botDark=0,total=0;
-  const STEP=3;
-
-  for(let y=y0;y<y0+rh;y+=STEP){
-    for(let x=x0;x<x0+rw;x+=STEP){
-      const i=(y*sw+x)*4;
-      const lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
-      total++;
-      if(lum<THR){
-        if(y<y0+rh*0.5) topDark++;
-        else botDark++;
-      }
+    .wrap{
+      min-height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
     }
-  }
-
-  if(total===0) return false;
-
-  const topR=topDark/total, botR=botDark/total;
-  const totalDark=(topDark+botDark)/total;
-  return totalDark>0.10 && totalDark<0.65 && botR>topR*0.8;
-}
-
-// ★ ここを4枚に変更
-const STEP_IMAGES = ['step1.png','step2.png','step3.png','step4.png'];
-
-// ★ step1だけ4秒、step2〜4は3秒
-const STEP_DURATIONS = [4000,3000,3000,3000];
-
-const SIM_THR=0.975;
-const FOUND_NEED=4;
-const LOST_NEED=12;
-const SCAN_W=160, SCAN_H=120;
-
-const bgVideo=document.getElementById('bgVideo');
-const procCanvas=document.getElementById('procCanvas');
-const stepImg=document.getElementById('stepImg');
-const startOverlay=document.getElementById('startOverlay');
-const startBtn=document.getElementById('startBtn');
-const retryBtn=document.getElementById('retryBtn');
-const startErr=document.getElementById('startErr');
-const pillState=document.getElementById('pillState');
-const pillShowing=document.getElementById('pillShowing');
-const showingNum=document.getElementById('showingNum');
-const metaDbg=document.getElementById('metaDbg');
-
-let stepIndex=0;
-let stepTimer=null;
-let isFound=false;
-let foundCount=0;
-let lostCount=0;
-let frameCount=0;
-let procCtx=null;
-let stream=null;
-
-// ── 画像先読み ──
-function preloadSteps(){
-  STEP_IMAGES.forEach(src=>{
-    const img=new Image();
-    img.src=src;
-  });
-}
-
-function showStep(i){
-  stepIndex=i;
-  showingNum.textContent=String(i+1);
-  pillShowing.style.display='inline-block';
-
-  stepImg.classList.remove('visible');
-
-  setTimeout(()=>{
-    stepImg.src=STEP_IMAGES[i];
-    stepImg.classList.add('visible');
-  },60);
-}
-
-function scheduleNextStep(){
-  if(stepTimer){
-    clearTimeout(stepTimer);
-    stepTimer=null;
-  }
-
-  if(!isFound) return;
-
-  const wait=STEP_DURATIONS[stepIndex] || 3000;
-
-  stepTimer=setTimeout(()=>{
-    if(!isFound) return;
-    const next=(stepIndex+1)%STEP_IMAGES.length;
-    showStep(next);
-    scheduleNextStep();
-  },wait);
-}
-
-function startStepLoop(){
-  stopStepLoop();
-  showStep(0);          // step1
-  scheduleNextStep();   // step1は4秒、以降3秒ずつ
-}
-
-function stopStepLoop(){
-  if(stepTimer){
-    clearTimeout(stepTimer);
-    stepTimer=null;
-  }
-}
-
-function onMarkerFound(){
-  if(isFound) return;
-  isFound=true;
-  pillState.textContent='FOUND';
-  pillState.style.background='#0b4f9a';
-  startStepLoop();
-}
-
-function onMarkerLost(){
-  if(!isFound) return;
-  isFound=false;
-  pillState.textContent='WAIT';
-  pillState.style.background='#8a5a00';
-  pillShowing.style.display='none';
-  stepImg.classList.remove('visible');
-  stopStepLoop();
-}
-
-function detectMarker(){
-  requestAnimationFrame(detectMarker);
-
-  frameCount++;
-  if(frameCount%3!==0) return;
-
-  if(!bgVideo.videoWidth || !bgVideo.videoHeight) return;
-  if(!procCtx) return;
-
-  procCtx.drawImage(bgVideo,0,0,SCAN_W,SCAN_H);
-  const data=procCtx.getImageData(0,0,SCAN_W,SCAN_H).data;
-
-  const feat=extractFeature(data,SCAN_W,SCAN_H);
-
-  let maxSim=0;
-  for(const ref of MARKER_FEATURES){
-    const s=cosineSim(feat,ref);
-    if(s>maxSim) maxSim=s;
-  }
-
-  const simOk=maxSim>=SIM_THR;
-  const distOk=simOk ? verifyDarkDistribution(data,SCAN_W,SCAN_H) : false;
-  const detected=simOk && distOk;
-
-  if(frameCount%15===0){
-    metaDbg.textContent=`類似度: ${(maxSim*100).toFixed(1)}% (閾値:${(SIM_THR*100).toFixed(1)}%)`;
-  }
-
-  if(detected){
-    foundCount++;
-    lostCount=0;
-    if(foundCount>=FOUND_NEED) onMarkerFound();
-  }else{
-    lostCount++;
-    foundCount=0;
-    if(lostCount>=LOST_NEED) onMarkerLost();
-  }
-}
-
-async function startCamera(){
-  startBtn.disabled=true;
-  retryBtn.style.display='none';
-  startErr.style.display='none';
-  startErr.textContent='';
-
-  try{
-    const constraintsList=[
-      {
-        video:{
-          facingMode:{ideal:'environment'},
-          width:{ideal:1280},
-          height:{ideal:720}
-        },
-        audio:false
-      },
-      {
-        video:{
-          facingMode:'environment'
-        },
-        audio:false
-      },
-      {
-        video:true,
-        audio:false
-      }
-    ];
-
-    let lastErr=null;
-
-    for(const constraints of constraintsList){
-      try{
-        stream=await navigator.mediaDevices.getUserMedia(constraints);
-        break;
-      }catch(err){
-        lastErr=err;
-      }
+    .card{
+      width:min(92vw,520px);
+      background:#111;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:16px;
+      padding:24px;
+      text-align:center;
     }
+    h1{font-size:24px;margin-bottom:12px}
+    p{font-size:14px;line-height:1.7;margin-bottom:16px}
+    button{
+      appearance:none;
+      border:none;
+      background:#0b4f9a;
+      color:#fff;
+      padding:14px 28px;
+      border-radius:12px;
+      font-size:16px;
+      font-weight:700;
+    }
+    #log{
+      margin-top:16px;
+      font-size:13px;
+      color:#9fd3ff;
+      white-space:pre-wrap;
+      text-align:left;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>ARデバッグ画面</h1>
+      <p>
+        この画面が見えれば、<br>
+        GitHub Pages の表示自体は正常です。
+      </p>
+      <button id="btn">表示確認OK</button>
+      <div id="log">読み込み成功</div>
+    </div>
+  </div>
 
-    if(!stream) throw lastErr || new Error('カメラを起動できませんでした');
+  <script>
+    const log = document.getElementById('log');
+    const btn = document.getElementById('btn');
 
-    bgVideo.srcObject=stream;
-    bgVideo.setAttribute('playsinline','');
-    bgVideo.setAttribute('webkit-playsinline','');
-    bgVideo.muted=true;
+    log.textContent = 'HTML / CSS / JavaScript 読み込み成功';
 
-    await bgVideo.play();
+    btn.addEventListener('click', () => {
+      log.textContent = 'ボタン動作OK';
+    });
 
-    procCanvas.width=SCAN_W;
-    procCanvas.height=SCAN_H;
-    procCtx=procCanvas.getContext('2d',{willReadFrequently:true});
-
-    startOverlay.classList.add('hidden');
-    pillState.textContent='WAIT';
-    metaDbg.textContent='カメラ起動完了。マーカー待機中';
-  }catch(err){
-    console.error(err);
-    startErr.style.display='block';
-    startErr.textContent =
-      'カメラを起動できませんでした。\n' +
-      '・Safari / Chrome で開いているか\n' +
-      '・HTTPS（GitHub Pages）で開いているか\n' +
-      '・カメラ権限を許可しているか\n\n' +
-      '詳細: ' + (err && err.message ? err.message : err);
-    retryBtn.style.display='inline-block';
-    startBtn.disabled=false;
-  }
-}
-
-function stopCamera(){
-  if(stream){
-    stream.getTracks().forEach(track=>track.stop());
-    stream=null;
-  }
-}
-
-startBtn.addEventListener('click', async ()=>{
-  await startCamera();
-});
-
-retryBtn.addEventListener('click', async ()=>{
-  await startCamera();
-});
-
-window.addEventListener('beforeunload', stopCamera);
-
-preloadSteps();
-detectMarker();
-
-})();
-</script>
+    window.addEventListener('error', (e) => {
+      log.textContent = 'JSエラー: ' + e.message;
+    });
+  </script>
+</body>
+</html>
