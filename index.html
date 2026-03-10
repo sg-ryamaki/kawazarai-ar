@@ -5,480 +5,658 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <title>Water Dragon WebAR</title>
   <style>
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap');
+
+    :root{
+      --water:#5ecfff;
+      --glow:rgba(94,207,255,0.6);
     }
 
-    #app {
-      position: fixed;
-      inset: 0;
-      background: #000;
+    *,*::before,*::after{
+      box-sizing:border-box;
+      margin:0;
+      padding:0;
     }
 
-    #bgVideo {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #000;
-      z-index: 1;
+    html,body{
+      width:100%;
+      height:100%;
+      overflow:hidden;
+      background:#000;
+      font-family:'Noto Serif JP',serif;
+      -webkit-text-size-adjust:100%;
     }
 
-    #guide {
-      position: absolute;
-      inset: 0;
-      z-index: 10;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    #app{
+      position:fixed;
+      inset:0;
+      background:#000;
     }
 
-    .guide-box {
-      width: min(82vw, 82vh, 430px);
-      aspect-ratio: 1 / 1;
-      border: 3px solid rgba(255,255,255,.90);
-      border-radius: 18px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.16);
-      position: relative;
-      transition: opacity .25s ease;
+    #bgVideo{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      z-index:1;
+      background:#000;
+    }
+
+    /* ガイド */
+    #guide{
+      position:absolute;
+      inset:0;
+      z-index:10;
+      pointer-events:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:18px;
+      transition:opacity .35s ease;
+    }
+
+    .guide-box{
+      width:min(78vw,78vh,400px);
+      aspect-ratio:1/1;
+      position:relative;
+      transition:opacity .3s ease;
     }
 
     .guide-box::before,
-    .guide-box::after {
-      content: "";
-      position: absolute;
-      border-radius: 12px;
+    .guide-box::after,
+    .guide-corner-br,
+    .guide-corner-bl{
+      content:'';
+      position:absolute;
+      width:32px;
+      height:32px;
+      border-color:var(--water);
+      border-style:solid;
+      border-width:0;
     }
 
-    .guide-box::before {
-      inset: 12px;
-      border: 2px dashed rgba(255,255,255,.28);
+    .guide-box::before{
+      top:0;
+      left:0;
+      border-top-width:3px;
+      border-left-width:3px;
+      border-top-left-radius:6px;
+      animation:cornerPulse 2s ease-in-out infinite;
     }
 
-    .guide-box::after {
-      inset: 34px;
-      border: 1px solid rgba(255,255,255,.18);
+    .guide-box::after{
+      top:0;
+      right:0;
+      border-top-width:3px;
+      border-right-width:3px;
+      border-top-right-radius:6px;
+      animation:cornerPulse 2s ease-in-out infinite .5s;
     }
 
-    .guide-hidden .guide-box {
-      opacity: 0;
+    .guide-corner-br{
+      bottom:0;
+      right:0;
+      border-bottom-width:3px;
+      border-right-width:3px;
+      border-bottom-right-radius:6px;
+      animation:cornerPulse 2s ease-in-out infinite 1s;
     }
 
-    #scanLine {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: min(82vw, 82vh, 430px);
-      height: min(82vw, 82vh, 430px);
-      transform: translate(-50%, -50%);
-      border-radius: 18px;
-      overflow: hidden;
-      pointer-events: none;
-      z-index: 11;
-      opacity: .55;
-      transition: opacity .3s ease;
+    .guide-corner-bl{
+      bottom:0;
+      left:0;
+      border-bottom-width:3px;
+      border-left-width:3px;
+      border-bottom-left-radius:6px;
+      animation:cornerPulse 2s ease-in-out infinite 1.5s;
     }
 
-    #scanLine::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, rgba(0,255,255,0), rgba(120,255,255,.95), rgba(0,255,255,0));
-      box-shadow: 0 0 10px rgba(120,255,255,.8);
-      animation: scanMove 2.8s linear infinite;
+    .scan-line{
+      position:absolute;
+      left:0;
+      right:0;
+      height:2px;
+      background:linear-gradient(90deg,transparent,var(--water),rgba(94,207,255,.6),transparent);
+      top:0;
+      animation:scanMove 3s linear infinite;
+      opacity:.75;
     }
 
-    .guide-hidden #scanLine {
-      opacity: 0;
+    .guide-label{
+      color:rgba(94,207,255,.85);
+      font-size:13px;
+      letter-spacing:.2em;
+      text-shadow:0 0 10px var(--glow);
+      animation:labelBlink 2s ease-in-out infinite;
+      text-align:center;
+      padding:0 16px;
     }
 
-    #arStage {
-      position: absolute;
-      inset: 0;
-      z-index: 20;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity .35s ease;
+    .guide-hidden{
+      opacity:0;
     }
 
-    #arStage.active {
-      opacity: 1;
+    /* HUD */
+    #hudTL,#hudBR{
+      position:absolute;
+      width:64px;
+      height:64px;
+      z-index:25;
+      pointer-events:none;
+      opacity:.65;
     }
 
-    #auraLayer {
-      position: absolute;
-      inset: -8%;
-      background:
-        radial-gradient(circle at 50% 55%, rgba(120, 220, 255, 0.30) 0%, rgba(120, 220, 255, 0.14) 20%, rgba(120,220,255,0.05) 38%, rgba(120,220,255,0.00) 58%),
-        radial-gradient(circle at 50% 45%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0.00) 42%);
-      filter: blur(12px);
-      mix-blend-mode: screen;
-      opacity: .8;
-      animation: auraPulse 4.2s ease-in-out infinite;
+    #hudTL{top:14px;left:14px;}
+    #hudBR{bottom:14px;right:14px;transform:rotate(180deg);}
+
+    /* ARステージ */
+    #arStage{
+      position:absolute;
+      inset:0;
+      z-index:20;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .5s ease;
     }
 
-    #magicRing {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: min(62vw, 62vh, 320px);
-      height: min(62vw, 62vh, 320px);
-      transform: translate(-50%, -50%);
-      border-radius: 50%;
-      border: 1px solid rgba(150,240,255,.24);
-      box-shadow:
-        0 0 20px rgba(140,220,255,.18),
-        inset 0 0 24px rgba(140,220,255,.10);
-      opacity: .8;
-      mix-blend-mode: screen;
-      animation: slowRotate 16s linear infinite;
+    #arStage.active{
+      opacity:1;
     }
 
-    #magicRing::before,
-    #magicRing::after {
-      content: "";
-      position: absolute;
-      inset: 10%;
-      border-radius: 50%;
-      border: 1px dashed rgba(180,245,255,.22);
+    /* 画像レイヤー */
+    #contentWrap{
+      position:absolute;
+      inset:0;
+      z-index:21;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      padding:3vh 3vw;
     }
 
-    #magicRing::after {
-      inset: 22%;
-      border-style: solid;
-      border-color: rgba(200,250,255,.14);
-      animation: slowRotateReverse 12s linear infinite;
-    }
-
-    #rippleLayer {
-      position: absolute;
-      left: 50%;
-      bottom: 6%;
-      width: min(72vw, 72vh, 420px);
-      height: min(24vw, 24vh, 150px);
-      transform: translateX(-50%);
-      pointer-events: none;
-      opacity: .72;
-    }
-
-    .ripple {
-      position: absolute;
-      left: 50%;
-      bottom: 0;
-      border: 2px solid rgba(130, 220, 255, 0.55);
-      border-radius: 50%;
-      transform: translateX(-50%) scale(0.6);
-      opacity: 0;
-      mix-blend-mode: screen;
-    }
-
-    .r1 {
-      width: 44%;
-      height: 28%;
-      animation: rippleWave 2.8s linear infinite;
-    }
-
-    .r2 {
-      width: 62%;
-      height: 38%;
-      animation: rippleWave 2.8s linear infinite .9s;
-    }
-
-    .r3 {
-      width: 82%;
-      height: 52%;
-      animation: rippleWave 2.8s linear infinite 1.8s;
-    }
-
-    #sparkleLayer {
-      position: absolute;
-      inset: 0;
-      overflow: hidden;
-      pointer-events: none;
-      mix-blend-mode: screen;
-    }
-
-    .spark {
-      position: absolute;
-      width: 8px;
-      height: 8px;
-      background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(170,235,255,0.72) 45%, rgba(170,235,255,0) 72%);
-      border-radius: 50%;
-      opacity: 0;
-      filter: blur(.3px);
-      animation: sparkleFloat linear infinite;
-    }
-
-    #contentWrap {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-    }
-
-    #stepImg {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      opacity: 0;
-      transform: scale(1.08) translateY(14px);
-      filter:
-        drop-shadow(0 0 10px rgba(160, 235, 255, .22))
-        drop-shadow(0 0 24px rgba(120, 220, 255, .20))
-        brightness(1.02) saturate(1.02);
+    /* 画像全体が見えるように修正 */
+    #stepImg{
+      max-width:92vw;
+      max-height:86vh;
+      width:auto;
+      height:auto;
+      object-fit:contain;
+      opacity:0;
+      transform:scale(1.06) translateY(10px);
       transition:
-        opacity .55s ease,
-        transform .70s cubic-bezier(.2,.8,.2,1),
-        filter .55s ease;
-      will-change: transform, opacity, filter;
+        opacity .6s ease,
+        transform .75s cubic-bezier(.18,.85,.22,1),
+        filter .4s ease;
+      filter:
+        drop-shadow(0 0 10px rgba(160,235,255,.18))
+        drop-shadow(0 0 22px rgba(94,207,255,.18));
     }
 
-    #stepImg.visible {
-      opacity: 1;
-      transform: scale(1.00) translateY(0);
-      animation:
-        floatingDrift 5.5s ease-in-out infinite,
-        softBreath 4.8s ease-in-out infinite;
+    #stepImg.visible{
+      opacity:1;
+      transform:scale(1) translateY(0);
+      animation:floatDrift 6s ease-in-out infinite;
     }
 
-    #glowVeil {
-      position: absolute;
-      inset: 0;
+    /* エフェクト */
+    #fxLayer{
+      position:absolute;
+      inset:0;
+      z-index:30;
+      pointer-events:none;
+    }
+
+    #summonFlash{
+      position:absolute;
+      inset:0;
+      background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.95),rgba(94,207,255,.45) 38%,transparent 68%);
+      opacity:0;
+    }
+
+    #summonFlash.flash{
+      animation:summonBurst .7s ease-out forwards;
+    }
+
+    #hexagram{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:min(88vw,88vh,480px);
+      aspect-ratio:1/1;
+      transform:translate(-50%,-50%);
+      opacity:0;
+    }
+
+    #hexagram svg{
+      width:100%;
+      height:100%;
+      animation:hexaSpin 22s linear infinite;
+      filter:drop-shadow(0 0 8px var(--water)) drop-shadow(0 0 20px rgba(94,207,255,.5));
+    }
+
+    #arStage.active #hexagram{
+      animation:hexaFadeIn .9s .15s forwards;
+    }
+
+    #auraLayer{
+      position:absolute;
+      inset:-10%;
       background:
-        radial-gradient(circle at 50% 38%, rgba(255,255,255,0.22), rgba(255,255,255,0.06) 24%, rgba(255,255,255,0.00) 45%),
-        radial-gradient(circle at 52% 68%, rgba(140,220,255,0.18), rgba(140,220,255,0.05) 24%, rgba(140,220,255,0.00) 42%);
-      mix-blend-mode: screen;
-      opacity: .7;
-      pointer-events: none;
-      animation: glowPulse 4.6s ease-in-out infinite;
+        radial-gradient(circle at 50% 52%,rgba(94,207,255,.42) 0%,rgba(94,207,255,.18) 22%,transparent 50%),
+        radial-gradient(circle at 50% 42%,rgba(255,255,255,.22) 0%,rgba(255,255,255,.08) 22%,transparent 44%);
+      filter:blur(10px);
+      mix-blend-mode:screen;
+      animation:auraPulse 4.5s ease-in-out infinite;
     }
 
-    #hudCorners {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 21;
-      opacity: .55;
+    #energyRings{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:min(85vw,85vh,460px);
+      aspect-ratio:1/1;
+      transform:translate(-50%,-50%);
     }
 
-    .corner {
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      border-color: rgba(170,245,255,.7);
-      border-style: solid;
-      filter: drop-shadow(0 0 8px rgba(120,220,255,.3));
+    .ering{
+      position:absolute;
+      border-radius:50%;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      animation:ringPulse 4s ease-in-out infinite;
     }
 
-    .c1 { top: 22px; left: 22px; border-width: 2px 0 0 2px; }
-    .c2 { top: 22px; right: 22px; border-width: 2px 2px 0 0; }
-    .c3 { bottom: 22px; left: 22px; border-width: 0 0 2px 2px; }
-    .c4 { bottom: 22px; right: 22px; border-width: 0 2px 2px 0; }
+    .ering:nth-child(1){width:55%;height:55%;border:1.5px solid rgba(94,207,255,.65);animation-delay:0s;}
+    .ering:nth-child(2){width:70%;height:70%;border:1.5px solid rgba(94,207,255,.45);animation-delay:.7s;}
+    .ering:nth-child(3){width:85%;height:85%;border:1px solid rgba(94,207,255,.30);animation-delay:1.4s;}
+    .ering:nth-child(4){width:100%;height:100%;border:1px solid rgba(94,207,255,.18);animation-delay:2.1s;}
 
-    #overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 40;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      box-sizing: border-box;
-      background: linear-gradient(to bottom, rgba(0,0,0,.34), rgba(0,0,0,.54));
+    #sparkleLayer{
+      position:absolute;
+      inset:0;
+      overflow:hidden;
+      mix-blend-mode:screen;
     }
 
-    #overlay.hidden {
-      display: none;
+    .spark{
+      position:absolute;
+      width:9px;
+      height:9px;
+      background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(140,230,255,.8) 45%,transparent 72%);
+      border-radius:50%;
+      opacity:0;
+      animation:sparkFloat linear infinite;
     }
 
-    .panel {
-      width: auto;
-      min-width: 180px;
-      border-radius: 18px;
-      background: rgba(17,17,17,.88);
-      border: 1px solid rgba(255,255,255,.16);
-      box-shadow: 0 12px 32px rgba(0,0,0,.35);
-      color: #fff;
-      padding: 28px 24px;
-      box-sizing: border-box;
-      text-align: center;
-      backdrop-filter: blur(8px);
+    .drift{
+      position:absolute;
+      width:18px;
+      height:18px;
+      background:radial-gradient(circle,rgba(94,207,255,.7) 0%,transparent 68%);
+      border-radius:50%;
+      opacity:0;
+      animation:driftFloat ease-in-out infinite;
     }
 
-    .btn {
-      appearance: none;
-      border: none;
-      border-radius: 14px;
-      background: linear-gradient(180deg, #1572d6 0%, #0b4f9a 100%);
-      color: #fff;
-      padding: 14px 32px;
-      font-size: 18px;
-      font-weight: 700;
-      cursor: pointer;
-      min-width: 120px;
-      box-shadow: 0 8px 20px rgba(11,79,154,.35);
+    #glowVeil{
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 50% 34%,rgba(255,255,255,.20),rgba(255,255,255,.05) 28%,transparent 48%),
+        radial-gradient(circle at 52% 65%,rgba(94,207,255,.18),rgba(94,207,255,.04) 28%,transparent 46%);
+      mix-blend-mode:screen;
+      animation:glowPulse 5s ease-in-out infinite;
     }
 
-    .btn:disabled {
-      opacity: .6;
-      cursor: default;
-      box-shadow: none;
+    #rippleLayer{
+      position:absolute;
+      left:50%;
+      bottom:3%;
+      width:min(75vw,75vh,440px);
+      height:min(22vw,22vh,130px);
+      transform:translateX(-50%);
+      opacity:.85;
     }
 
-    #retryBtn {
-      margin-top: 12px;
-      background: linear-gradient(180deg, #6e6e6e 0%, #505050 100%);
-      display: none;
+    .ripple{
+      position:absolute;
+      left:50%;
+      bottom:0;
+      border:2px solid rgba(94,207,255,.6);
+      border-radius:50%;
+      transform:translateX(-50%) scale(.55);
+      opacity:0;
+      mix-blend-mode:screen;
     }
 
-    #errorText {
-      margin-top: 14px;
-      white-space: pre-wrap;
-      text-align: left;
-      font-size: 13px;
-      line-height: 1.6;
-      color: #ffd0d0;
-      display: none;
-      max-width: 320px;
+    .r1{width:38%;height:26%;animation:rippleWave 3s linear infinite;}
+    .r2{width:58%;height:38%;animation:rippleWave 3s linear infinite .95s;}
+    .r3{width:80%;height:52%;animation:rippleWave 3s linear infinite 1.9s;}
+
+    /* ステップドット */
+    #stepDots{
+      position:absolute;
+      bottom:28px;
+      left:50%;
+      transform:translateX(-50%);
+      display:flex;
+      gap:9px;
+      z-index:35;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .4s;
     }
 
-    #procCanvas {
-      display: none;
+    #arStage.active #stepDots{
+      opacity:1;
     }
 
-    @keyframes scanMove {
-      0% { top: 0%; }
-      100% { top: 100%; }
+    .dot{
+      width:9px;
+      height:9px;
+      border-radius:50%;
+      background:rgba(94,207,255,.25);
+      border:1.5px solid rgba(94,207,255,.6);
+      transition:all .35s ease;
     }
 
-    @keyframes rippleWave {
-      0% {
-        transform: translateX(-50%) scale(0.62);
-        opacity: 0;
+    .dot.on{
+      background:var(--water);
+      box-shadow:0 0 10px var(--water),0 0 20px rgba(94,207,255,.6);
+      transform:scale(1.35);
+    }
+
+    /* スタート画面 */
+    #overlay{
+      position:absolute;
+      inset:0;
+      z-index:40;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:linear-gradient(160deg,rgba(0,8,20,.93) 0%,rgba(0,22,50,.90) 100%);
+    }
+
+    #overlay.hidden{
+      display:none;
+    }
+
+    .panel{
+      width:min(340px,94vw);
+      border-radius:22px;
+      background:rgba(0,15,36,.88);
+      border:1px solid rgba(94,207,255,.24);
+      box-shadow:
+        0 0 0 1px rgba(94,207,255,.07),
+        0 0 44px rgba(94,207,255,.14),
+        inset 0 1px 0 rgba(255,255,255,.07);
+      color:#fff;
+      padding:38px 28px 34px;
+      text-align:center;
+      backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .panel::before{
+      content:'';
+      position:absolute;
+      top:0;
+      left:50%;
+      transform:translateX(-50%);
+      width:60%;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(94,207,255,.65),transparent);
+    }
+
+    .panel-icon{
+      font-size:44px;
+      margin-bottom:10px;
+      display:block;
+      filter:drop-shadow(0 0 12px rgba(94,207,255,.65));
+      animation:iconFloat 3s ease-in-out infinite;
+    }
+
+    .panel-title{
+      font-size:20px;
+      font-weight:700;
+      color:var(--water);
+      letter-spacing:.12em;
+      text-shadow:0 0 14px var(--glow);
+      margin-bottom:8px;
+    }
+
+    .panel-sub{
+      font-size:13px;
+      color:rgba(255,255,255,.58);
+      letter-spacing:.04em;
+      margin-bottom:28px;
+      line-height:1.85;
+    }
+
+    .btn{
+      appearance:none;
+      border:none;
+      border-radius:14px;
+      background:linear-gradient(160deg,#1e8fff 0%,#0a5acc 100%);
+      color:#fff;
+      padding:15px 40px;
+      font-size:17px;
+      font-weight:700;
+      font-family:'Noto Serif JP',serif;
+      cursor:pointer;
+      width:100%;
+      letter-spacing:.12em;
+      box-shadow:0 6px 22px rgba(10,90,204,.48),inset 0 1px 0 rgba(255,255,255,.2);
+      transition:transform .15s,box-shadow .15s;
+    }
+
+    .btn:active{
+      transform:scale(.97);
+    }
+
+    .btn:disabled{
+      opacity:.6;
+      cursor:default;
+    }
+
+    #retryBtn{
+      margin-top:10px;
+      background:linear-gradient(160deg,#555 0%,#333 100%);
+      box-shadow:0 4px 14px rgba(0,0,0,.3);
+      display:none;
+    }
+
+    #errorText{
+      margin-top:14px;
+      white-space:pre-wrap;
+      text-align:left;
+      font-size:12px;
+      line-height:1.65;
+      color:#ffb0b0;
+      display:none;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+
+    #procCanvas{
+      display:none;
+    }
+
+    @keyframes cornerPulse{
+      0%,100%{opacity:.6;}
+      50%{opacity:1;filter:drop-shadow(0 0 7px var(--water));}
+    }
+
+    @keyframes scanMove{
+      0%{top:0;opacity:0;}
+      5%{opacity:.75;}
+      95%{opacity:.75;}
+      100%{top:100%;opacity:0;}
+    }
+
+    @keyframes labelBlink{
+      0%,100%{opacity:.55;}
+      50%{opacity:.95;}
+    }
+
+    @keyframes summonBurst{
+      0%{opacity:.95;transform:scale(.5);}
+      35%{opacity:.75;}
+      100%{opacity:0;transform:scale(2.4);}
+    }
+
+    @keyframes hexaFadeIn{
+      from{opacity:0;transform:translate(-50%,-50%) scale(.65) rotate(-30deg);}
+      to{opacity:.28;}
+    }
+
+    @keyframes hexaSpin{
+      from{transform:rotate(0deg);}
+      to{transform:rotate(360deg);}
+    }
+
+    @keyframes auraPulse{
+      0%,100%{transform:scale(.96);opacity:.7;}
+      50%{transform:scale(1.05);opacity:1;}
+    }
+
+    @keyframes ringPulse{
+      0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.6;}
+      50%{transform:translate(-50%,-50%) scale(1.08);opacity:1;}
+    }
+
+    @keyframes rippleWave{
+      0%{transform:translateX(-50%) scale(.55);opacity:0;}
+      14%{opacity:.65;}
+      100%{transform:translateX(-50%) scale(1.25);opacity:0;}
+    }
+
+    @keyframes sparkFloat{
+      0%{transform:translate3d(0,20px,0) scale(.5);opacity:0;}
+      15%{opacity:1;}
+      85%{opacity:.6;}
+      100%{transform:translate3d(0,-160px,0) scale(1.4);opacity:0;}
+    }
+
+    @keyframes driftFloat{
+      0%{transform:translateY(0) scale(.75);opacity:0;}
+      18%{opacity:.7;}
+      82%{opacity:.4;}
+      100%{transform:translateY(-200px) scale(1.3);opacity:0;}
+    }
+
+    @keyframes floatDrift{
+      0%,100%{transform:scale(1) translateY(0);}
+      40%{transform:scale(1.012) translateY(-8px);}
+      70%{transform:scale(1.02) translateY(-14px);}
+    }
+
+    @keyframes glowPulse{
+      0%,100%{opacity:.5;}
+      50%{opacity:.9;}
+    }
+
+    @keyframes iconFloat{
+      0%,100%{transform:translateY(0);}
+      50%{transform:translateY(-6px);}
+    }
+
+    @media (max-width: 640px){
+      .panel{
+        padding:34px 22px 28px;
       }
-      18% {
-        opacity: .55;
+      .panel-title{
+        font-size:18px;
       }
-      100% {
-        transform: translateX(-50%) scale(1.18);
-        opacity: 0;
+      .panel-sub{
+        font-size:12px;
       }
-    }
-
-    @keyframes auraPulse {
-      0%, 100% {
-        transform: scale(0.98);
-        opacity: .72;
+      #stepImg{
+        max-width:94vw;
+        max-height:82vh;
       }
-      50% {
-        transform: scale(1.03);
-        opacity: .95;
-      }
-    }
-
-    @keyframes sparkleFloat {
-      0% {
-        transform: translate3d(0, 16px, 0) scale(.6);
-        opacity: 0;
-      }
-      18% {
-        opacity: .85;
-      }
-      80% {
-        opacity: .6;
-      }
-      100% {
-        transform: translate3d(0, -130px, 0) scale(1.2);
-        opacity: 0;
-      }
-    }
-
-    @keyframes floatingDrift {
-      0%, 100% {
-        transform: scale(1.00) translateY(0px);
-      }
-      25% {
-        transform: scale(1.008) translateY(-5px);
-      }
-      50% {
-        transform: scale(1.015) translateY(-10px);
-      }
-      75% {
-        transform: scale(1.008) translateY(-4px);
-      }
-    }
-
-    @keyframes softBreath {
-      0%, 100% {
-        filter:
-          drop-shadow(0 0 10px rgba(160, 235, 255, .22))
-          drop-shadow(0 0 24px rgba(120, 220, 255, .20))
-          brightness(1.02) saturate(1.02);
-      }
-      50% {
-        filter:
-          drop-shadow(0 0 14px rgba(190, 245, 255, .34))
-          drop-shadow(0 0 30px rgba(120, 220, 255, .28))
-          brightness(1.05) saturate(1.04);
-      }
-    }
-
-    @keyframes glowPulse {
-      0%, 100% {
-        opacity: .52;
-      }
-      50% {
-        opacity: .86;
-      }
-    }
-
-    @keyframes slowRotate {
-      0% { transform: translate(-50%, -50%) rotate(0deg); }
-      100% { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-
-    @keyframes slowRotateReverse {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(-360deg); }
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <video id="bgVideo" playsinline webkit-playsinline muted></video>
+<div id="app">
+  <video id="bgVideo" playsinline webkit-playsinline muted></video>
 
-    <div id="guide">
-      <div class="guide-box"></div>
-      <div id="scanLine"></div>
+  <div id="guide">
+    <div class="guide-box">
+      <div class="scan-line"></div>
+      <div class="guide-corner-br"></div>
+      <div class="guide-corner-bl"></div>
+    </div>
+    <span class="guide-label">マーカーを枠内に合わせてください</span>
+  </div>
+
+  <svg id="hudTL" viewBox="0 0 64 64" fill="none">
+    <path d="M0 22 L0 5 Q0 0 5 0 L22 0" stroke="#5ecfff" stroke-width="2.5"/>
+    <circle cx="1" cy="1" r="3.5" fill="#5ecfff" opacity=".6"/>
+  </svg>
+  <svg id="hudBR" viewBox="0 0 64 64" fill="none">
+    <path d="M0 22 L0 5 Q0 0 5 0 L22 0" stroke="#5ecfff" stroke-width="2.5"/>
+    <circle cx="1" cy="1" r="3.5" fill="#5ecfff" opacity=".6"/>
+  </svg>
+
+  <div id="arStage">
+    <div id="contentWrap">
+      <img id="stepImg" alt="AR content">
     </div>
 
-    <div id="arStage">
-      <div id="auraLayer"></div>
-      <div id="magicRing"></div>
+    <div id="fxLayer">
+      <div id="summonFlash"></div>
 
-      <div id="sparkleLayer">
-        <div class="spark" style="left:18%; top:72%; animation-duration:4.8s; animation-delay:.2s;"></div>
-        <div class="spark" style="left:26%; top:78%; animation-duration:5.4s; animation-delay:1.1s;"></div>
-        <div class="spark" style="left:38%; top:70%; animation-duration:4.6s; animation-delay:.8s;"></div>
-        <div class="spark" style="left:52%; top:80%; animation-duration:5.6s; animation-delay:1.4s;"></div>
-        <div class="spark" style="left:62%; top:74%; animation-duration:4.9s; animation-delay:.5s;"></div>
-        <div class="spark" style="left:72%; top:79%; animation-duration:5.1s; animation-delay:1.8s;"></div>
-        <div class="spark" style="left:82%; top:71%; animation-duration:4.7s; animation-delay:1.0s;"></div>
-        <div class="spark" style="left:46%; top:64%; animation-duration:5.8s; animation-delay:2.0s;"></div>
+      <div id="hexagram">
+        <svg viewBox="0 0 200 200" fill="none">
+          <circle cx="100" cy="100" r="96" stroke="rgba(94,207,255,0.4)" stroke-width="1" stroke-dasharray="5 7"/>
+          <polygon points="100,8 122,52 168,52 132,80 148,124 100,96 52,124 68,80 32,52 78,52"
+            fill="none" stroke="rgba(94,207,255,0.65)" stroke-width="1.2"/>
+          <circle cx="100" cy="100" r="58" stroke="rgba(94,207,255,0.32)" stroke-width=".8" stroke-dasharray="3 5"/>
+          <circle cx="100" cy="100" r="10" stroke="rgba(94,207,255,0.55)" stroke-width="1"/>
+          <circle cx="100" cy="8" r="3.5" fill="rgba(94,207,255,0.6)"/>
+          <circle cx="100" cy="192" r="3.5" fill="rgba(94,207,255,0.6)"/>
+          <circle cx="8" cy="100" r="3.5" fill="rgba(94,207,255,0.6)"/>
+          <circle cx="192" cy="100" r="3.5" fill="rgba(94,207,255,0.6)"/>
+          <line x1="100" y1="8" x2="100" y2="192" stroke="rgba(94,207,255,0.12)" stroke-width=".6"/>
+          <line x1="8" y1="100" x2="192" y2="100" stroke="rgba(94,207,255,0.12)" stroke-width=".6"/>
+        </svg>
       </div>
 
-      <div id="contentWrap">
-        <img id="stepImg" alt="AR content">
+      <div id="auraLayer"></div>
+
+      <div id="energyRings">
+        <div class="ering"></div>
+        <div class="ering"></div>
+        <div class="ering"></div>
+        <div class="ering"></div>
+      </div>
+
+      <div id="sparkleLayer">
+        <div class="spark" style="left:10%;top:78%;animation-duration:5.0s;animation-delay:.0s"></div>
+        <div class="spark" style="left:18%;top:82%;animation-duration:5.5s;animation-delay:.7s"></div>
+        <div class="spark" style="left:27%;top:74%;animation-duration:4.7s;animation-delay:.3s"></div>
+        <div class="spark" style="left:36%;top:85%;animation-duration:5.9s;animation-delay:1.2s"></div>
+        <div class="spark" style="left:47%;top:76%;animation-duration:5.2s;animation-delay:.5s"></div>
+        <div class="spark" style="left:55%;top:80%;animation-duration:4.8s;animation-delay:1.6s"></div>
+        <div class="spark" style="left:64%;top:72%;animation-duration:5.4s;animation-delay:.2s"></div>
+        <div class="spark" style="left:73%;top:83%;animation-duration:5.1s;animation-delay:1.0s"></div>
+        <div class="spark" style="left:82%;top:77%;animation-duration:5.7s;animation-delay:.8s"></div>
+        <div class="spark" style="left:91%;top:81%;animation-duration:4.9s;animation-delay:1.9s"></div>
+        <div class="spark" style="left:42%;top:66%;animation-duration:6.1s;animation-delay:2.0s"></div>
+        <div class="spark" style="left:58%;top:69%;animation-duration:5.6s;animation-delay:.6s"></div>
+        <div class="spark" style="left:30%;top:60%;animation-duration:6.4s;animation-delay:2.8s"></div>
+        <div class="spark" style="left:70%;top:63%;animation-duration:5.8s;animation-delay:1.4s"></div>
+        <div class="drift" style="left:22%;top:90%;animation-duration:7.2s;animation-delay:.2s"></div>
+        <div class="drift" style="left:44%;top:92%;animation-duration:8.0s;animation-delay:2.2s"></div>
+        <div class="drift" style="left:66%;top:88%;animation-duration:7.6s;animation-delay:1.0s"></div>
+        <div class="drift" style="left:84%;top:91%;animation-duration:8.4s;animation-delay:3.1s"></div>
       </div>
 
       <div id="glowVeil"></div>
@@ -488,478 +666,514 @@
         <div class="ripple r2"></div>
         <div class="ripple r3"></div>
       </div>
-
-      <div id="hudCorners">
-        <div class="corner c1"></div>
-        <div class="corner c2"></div>
-        <div class="corner c3"></div>
-        <div class="corner c4"></div>
-      </div>
     </div>
 
-    <div id="overlay">
-      <div class="panel">
-        <button id="startBtn" class="btn">START</button>
-        <button id="retryBtn" class="btn">再試行</button>
-        <div id="errorText"></div>
-      </div>
+    <div id="stepDots">
+      <div class="dot" data-i="0"></div>
+      <div class="dot" data-i="1"></div>
+      <div class="dot" data-i="2"></div>
+      <div class="dot" data-i="3"></div>
+      <div class="dot" data-i="4"></div>
+      <div class="dot" data-i="5"></div>
+      <div class="dot" data-i="6"></div>
     </div>
-
-    <canvas id="procCanvas" width="200" height="150"></canvas>
   </div>
 
-  <script>
-    (() => {
-      'use strict';
+  <div id="overlay">
+    <div class="panel">
+      <span class="panel-icon">🌊</span>
+      <div class="panel-title">水龍神様 AR</div>
+      <div class="panel-sub">マーカーをカメラで読み取ると<br>水龍神様が現れます</div>
+      <button id="startBtn" class="btn">AR を開始する</button>
+      <button id="retryBtn" class="btn">再試行</button>
+      <div id="errorText"></div>
+    </div>
+  </div>
 
-      const STEP_IMAGES = [
-        'step1.png',
-        'step2.png',
-        'step3.png',
-        'step4.png',
-        'step5.png',
-        'step6.png',
-        'step7.png'
-      ];
+  <canvas id="procCanvas" width="200" height="150"></canvas>
+</div>
 
-      // 必要に応じて秒数調整してください（ミリ秒）
-      const STEP_DURATIONS = [
-        4000,
-        3500,
-        3500,
-        3500,
-        3500,
-        3500,
-        3500
-      ];
+<script>
+(()=>{
+'use strict';
 
-      const SCAN_W = 200;
-      const SCAN_H = 150;
+const STEP_IMAGES = [
+  'step1.png',
+  'step2.png',
+  'step3.png',
+  'step4.png',
+  'step5.png',
+  'step6.png',
+  'step7.png'
+];
 
-      const FOUND_NEED = 4;
-      const LOST_NEED = 10;
+// 画像ループはBGMと独立
+const STEP_DURATIONS = [
+  4000,
+  3500,
+  3500,
+  3500,
+  3500,
+  3500,
+  3500
+];
 
-      // BGM制御
-      const BGM_SRC = 'bgm.mp3';
-      const BGM_START_DELAY = 2000; // 認識後2秒
-      const BGM_STOP_DELAY = 2000;  // 未認識後2秒
+const FOUND_NEED = 4;
+const LOST_NEED = 10;
+const SCAN_W = 200;
+const SCAN_H = 150;
 
-      const bgVideo = document.getElementById('bgVideo');
-      const stepImg = document.getElementById('stepImg');
-      const overlay = document.getElementById('overlay');
-      const startBtn = document.getElementById('startBtn');
-      const retryBtn = document.getElementById('retryBtn');
-      const errorText = document.getElementById('errorText');
-      const procCanvas = document.getElementById('procCanvas');
-      const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
-      const arStage = document.getElementById('arStage');
-      const guide = document.getElementById('guide');
+const BGM_FILE = 'bgm.mp3';
+const BGM_START_DELAY = 2000;
+const BGM_STOP_DELAY  = 2000;
 
-      const bgm = new Audio(BGM_SRC);
-      bgm.loop = true;
-      bgm.preload = 'auto';
-      bgm.playsInline = true;
-      bgm.crossOrigin = 'anonymous';
+const bgVideo = document.getElementById('bgVideo');
+const stepImg = document.getElementById('stepImg');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const retryBtn = document.getElementById('retryBtn');
+const errorText = document.getElementById('errorText');
+const procCanvas = document.getElementById('procCanvas');
+const procCtx = procCanvas.getContext('2d', { willReadFrequently:true });
+const arStage = document.getElementById('arStage');
+const guide = document.getElementById('guide');
+const summonFlash = document.getElementById('summonFlash');
+const dots = document.querySelectorAll('.dot');
 
-      let stream = null;
-      let started = false;
-      let isFound = false;
-      let foundCount = 0;
-      let lostCount = 0;
-      let stepIndex = 0;
-      let stepTimer = null;
-      let frameCount = 0;
+let stream = null;
+let started = false;
+let isFound = false;
+let foundCount = 0;
+let lostCount = 0;
+let stepIndex = 0;
+let stepTimer = null;
+let frameCount = 0;
 
-      let bgmUnlocked = false;
-      let bgmStartTimer = null;
-      let bgmStopTimer = null;
+// BGM
+let bgmAudio = null;
+let bgmUnlocked = false;
+let bgmStartTimer = null;
+let bgmStopTimer = null;
 
-      function preloadImages() {
-        STEP_IMAGES.forEach(src => {
-          const img = new Image();
-          img.src = src;
-        });
+/* プリロード */
+function preloadImages(){
+  STEP_IMAGES.forEach(src => {
+    const img = new Image();
+    img.src = src;
+  });
+}
+
+/* ドット */
+function updateDots(i){
+  dots.forEach((dot, idx) => {
+    dot.classList.toggle('on', idx === i);
+  });
+}
+
+/* ステップ */
+function showStep(i){
+  stepIndex = i;
+  stepImg.classList.remove('visible');
+  updateDots(i);
+
+  setTimeout(() => {
+    stepImg.src = STEP_IMAGES[i];
+    stepImg.classList.add('visible');
+  }, 60);
+}
+
+function stopStepLoop(){
+  if(stepTimer){
+    clearTimeout(stepTimer);
+    stepTimer = null;
+  }
+}
+
+function scheduleNextStep(){
+  stopStepLoop();
+  if(!isFound) return;
+
+  const duration = STEP_DURATIONS[stepIndex] || 3500;
+
+  stepTimer = setTimeout(() => {
+    if(!isFound) return;
+    showStep((stepIndex + 1) % STEP_IMAGES.length);
+    scheduleNextStep();
+  }, duration);
+}
+
+function startStepLoop(){
+  stopStepLoop();
+  showStep(0);
+  scheduleNextStep();
+}
+
+function resetDisplay(){
+  stopStepLoop();
+  stepImg.classList.remove('visible');
+  updateDots(-1);
+}
+
+/* AR表示 */
+function setARVisible(visible){
+  if(visible){
+    arStage.classList.add('active');
+    guide.classList.add('guide-hidden');
+
+    summonFlash.classList.remove('flash');
+    void summonFlash.offsetWidth;
+    summonFlash.classList.add('flash');
+  }else{
+    arStage.classList.remove('active');
+    guide.classList.remove('guide-hidden');
+  }
+}
+
+/* BGM制御 */
+function clearBgmTimers(){
+  if(bgmStartTimer){
+    clearTimeout(bgmStartTimer);
+    bgmStartTimer = null;
+  }
+  if(bgmStopTimer){
+    clearTimeout(bgmStopTimer);
+    bgmStopTimer = null;
+  }
+}
+
+async function unlockBGM(){
+  if(bgmUnlocked) return;
+
+  if(!bgmAudio){
+    bgmAudio = new Audio(BGM_FILE);
+    bgmAudio.loop = true;
+    bgmAudio.preload = 'auto';
+    bgmAudio.playsInline = true;
+    bgmAudio.crossOrigin = 'anonymous';
+    bgmAudio.volume = 0.55;
+  }
+
+  try{
+    bgmAudio.muted = true;
+    await bgmAudio.play();
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+    bgmAudio.muted = false;
+    bgmUnlocked = true;
+  }catch(e){
+    console.warn('BGM unlock failed:', e);
+    bgmAudio.muted = false;
+    bgmUnlocked = true;
+  }
+}
+
+function scheduleBgmPlay(){
+  if(!bgmUnlocked || !bgmAudio) return;
+
+  if(bgmStopTimer){
+    clearTimeout(bgmStopTimer);
+    bgmStopTimer = null;
+  }
+
+  if(bgmStartTimer || !bgmAudio.paused) return;
+
+  bgmStartTimer = setTimeout(async () => {
+    bgmStartTimer = null;
+    if(!isFound) return;
+    try{
+      await bgmAudio.play();
+    }catch(e){
+      console.warn('BGM play failed:', e);
+    }
+  }, BGM_START_DELAY);
+}
+
+function scheduleBgmPause(){
+  if(bgmStartTimer){
+    clearTimeout(bgmStartTimer);
+    bgmStartTimer = null;
+  }
+
+  if(!bgmAudio) return;
+  if(bgmStopTimer) return;
+
+  bgmStopTimer = setTimeout(() => {
+    bgmStopTimer = null;
+    if(isFound) return;
+    try{
+      bgmAudio.pause();
+    }catch(e){
+      console.warn('BGM pause failed:', e);
+    }
+  }, BGM_STOP_DELAY);
+}
+
+/* マーカー状態 */
+function onMarkerFound(){
+  if(isFound) return;
+  isFound = true;
+  setARVisible(true);
+  startStepLoop();
+  scheduleBgmPlay();
+}
+
+function onMarkerLost(){
+  if(!isFound) return;
+  isFound = false;
+  setARVisible(false);
+  resetDisplay();
+  scheduleBgmPause();
+}
+
+/* カメラ */
+async function startCamera(){
+  startBtn.disabled = true;
+  retryBtn.style.display = 'none';
+  errorText.style.display = 'none';
+  errorText.textContent = '';
+
+  try{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      throw new Error('このブラウザはカメラAPIに十分対応していません。');
+    }
+
+    const constraintsList = [
+      {
+        video:{
+          facingMode:{ ideal:'environment' },
+          width:{ ideal:1280 },
+          height:{ ideal:720 }
+        },
+        audio:false
+      },
+      {
+        video:{ facingMode:'environment' },
+        audio:false
+      },
+      {
+        video:true,
+        audio:false
+      }
+    ];
+
+    let lastError = null;
+
+    for(const constraints of constraintsList){
+      try{
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        break;
+      }catch(err){
+        lastError = err;
+      }
+    }
+
+    if(!stream){
+      throw lastError || new Error('カメラを起動できませんでした。');
+    }
+
+    bgVideo.srcObject = stream;
+    bgVideo.setAttribute('playsinline', '');
+    bgVideo.setAttribute('webkit-playsinline', '');
+    bgVideo.muted = true;
+
+    await bgVideo.play();
+    await unlockBGM();
+
+    overlay.classList.add('hidden');
+    started = true;
+    foundCount = 0;
+    lostCount = 0;
+    isFound = false;
+    setARVisible(false);
+    clearBgmTimers();
+
+    if(bgmAudio){
+      try{
+        bgmAudio.pause();
+      }catch(e){}
+    }
+
+  }catch(err){
+    console.error(err);
+    errorText.style.display = 'block';
+    errorText.textContent =
+      'カメラを起動できませんでした。\n' +
+      '・Safari / Chrome で開いているか\n' +
+      '・GitHub Pages の URL で開いているか\n' +
+      '・カメラ権限を許可しているか\n\n' +
+      '詳細: ' + (err && err.message ? err.message : String(err));
+
+    retryBtn.style.display = 'inline-block';
+    startBtn.disabled = false;
+  }
+}
+
+function stopCamera(){
+  clearBgmTimers();
+
+  if(bgmAudio){
+    try{
+      bgmAudio.pause();
+    }catch(e){}
+  }
+
+  if(stream){
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+}
+
+/* 検出 */
+function analyzeWindow(data, sw, sh, rect){
+  const x0 = Math.max(0, Math.floor(rect.x));
+  const y0 = Math.max(0, Math.floor(rect.y));
+  const rw = Math.min(sw - x0, Math.floor(rect.w));
+  const rh = Math.min(sh - y0, Math.floor(rect.h));
+
+  if(rw < 20 || rh < 20) return null;
+
+  const tx0 = x0 + Math.floor(rw * 0.18);
+  const ty0 = y0 + Math.floor(rh * 0.15);
+  const trw = Math.floor(rw * 0.64);
+  const trh = Math.floor(rh * 0.60);
+  const borderThickness = Math.max(6, Math.floor(Math.min(rw, rh) * 0.10));
+
+  let total = 0;
+  let white = 0;
+  let black = 0;
+  let blue = 0;
+  let textTotal = 0;
+  let textDark = 0;
+  let borderTotal = 0;
+  let borderBlue = 0;
+
+  for(let y = y0; y < y0 + rh; y += 2){
+    for(let x = x0; x < x0 + rw; x += 2){
+      const i = (y * sw + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      total++;
+
+      if(lum > 168) white++;
+      if(lum < 105) black++;
+      if(b > 90 && b > r + 12 && b > g + 8) blue++;
+
+      const nearBorder =
+        (x < x0 + borderThickness) ||
+        (x > x0 + rw - borderThickness) ||
+        (y < y0 + borderThickness) ||
+        (y > y0 + rh - borderThickness);
+
+      if(nearBorder){
+        borderTotal++;
+        if(b > 90 && b > r + 12 && b > g + 8) borderBlue++;
       }
 
-      function clearBgmTimers() {
-        if (bgmStartTimer) {
-          clearTimeout(bgmStartTimer);
-          bgmStartTimer = null;
-        }
-        if (bgmStopTimer) {
-          clearTimeout(bgmStopTimer);
-          bgmStopTimer = null;
-        }
+      const inTextArea =
+        x >= tx0 && x < tx0 + trw &&
+        y >= ty0 && y < ty0 + trh;
+
+      if(inTextArea){
+        textTotal++;
+        if(lum < 110) textDark++;
       }
+    }
+  }
 
-      async function unlockBgm() {
-        if (bgmUnlocked) return;
-        try {
-          bgm.muted = true;
-          await bgm.play();
-          bgm.pause();
-          bgm.currentTime = 0;
-          bgm.muted = false;
-          bgmUnlocked = true;
-        } catch (e) {
-          console.warn('BGM unlock failed:', e);
-        }
+  if(!total || !textTotal || !borderTotal) return null;
+
+  return {
+    whiteRatio: white / total,
+    blackRatio: black / total,
+    blueRatio: blue / total,
+    textDarkRatio: textDark / textTotal,
+    borderBlueRatio: borderBlue / borderTotal,
+    areaRatio: (rw * rh) / (sw * sh)
+  };
+}
+
+function scoreMarker(m){
+  if(!m) return 0;
+
+  let score = 0;
+  if(m.whiteRatio > .32 && m.whiteRatio < .92) score++;
+  if(m.blackRatio > .025 && m.blackRatio < .34) score++;
+  if(m.textDarkRatio > .035 && m.textDarkRatio < .48) score++;
+  if(m.blueRatio > .003) score++;
+  if(m.borderBlueRatio > .004) score++;
+  if(m.areaRatio > .10 && m.areaRatio < .72) score++;
+
+  return score;
+}
+
+function findBestMarker(data, sw, sh){
+  const windows = [
+    { x:sw*.10, y:sh*.08, w:sw*.80, h:sh*.80 },
+    { x:sw*.18, y:sh*.12, w:sw*.64, h:sh*.72 },
+    { x:sw*.24, y:sh*.16, w:sw*.52, h:sh*.62 }
+  ];
+
+  let best = null;
+  let bestScore = -1;
+
+  for(const rect of windows){
+    const m = analyzeWindow(data, sw, sh, rect);
+    const s = scoreMarker(m);
+    if(s > bestScore){
+      bestScore = s;
+      best = m;
+    }
+  }
+
+  return { best, bestScore };
+}
+
+function detectLoop(){
+  requestAnimationFrame(detectLoop);
+
+  if(!started || !bgVideo.videoWidth) return;
+
+  frameCount++;
+  if(frameCount % 2 !== 0) return;
+
+  try{
+    procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
+    const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
+    const data = imageData.data;
+
+    const { best, bestScore } = findBestMarker(data, SCAN_W, SCAN_H);
+    const detected = !!best && bestScore >= 5;
+
+    if(detected){
+      foundCount++;
+      lostCount = 0;
+      if(foundCount >= FOUND_NEED){
+        onMarkerFound();
       }
-
-      function scheduleBgmPlay() {
-        if (!bgmUnlocked) return;
-
-        if (bgmStopTimer) {
-          clearTimeout(bgmStopTimer);
-          bgmStopTimer = null;
-        }
-
-        if (bgmStartTimer || !bgm.paused) return;
-
-        bgmStartTimer = setTimeout(async () => {
-          bgmStartTimer = null;
-          if (!isFound) return;
-          try {
-            await bgm.play();
-          } catch (e) {
-            console.warn('BGM play failed:', e);
-          }
-        }, BGM_START_DELAY);
+    }else{
+      lostCount++;
+      foundCount = 0;
+      if(lostCount >= LOST_NEED){
+        onMarkerLost();
       }
+    }
+  }catch(e){
+    console.error(e);
+  }
+}
 
-      function scheduleBgmPause() {
-        if (bgmStartTimer) {
-          clearTimeout(bgmStartTimer);
-          bgmStartTimer = null;
-        }
+startBtn.addEventListener('click', startCamera);
+retryBtn.addEventListener('click', startCamera);
+window.addEventListener('beforeunload', stopCamera);
 
-        if (bgm.paused && !bgmStopTimer) return;
-        if (bgmStopTimer) return;
-
-        bgmStopTimer = setTimeout(() => {
-          bgmStopTimer = null;
-          if (isFound) return;
-          try {
-            bgm.pause();
-          } catch (e) {
-            console.warn('BGM pause failed:', e);
-          }
-        }, BGM_STOP_DELAY);
-      }
-
-      function showStep(i) {
-        stepIndex = i;
-        stepImg.classList.remove('visible');
-
-        setTimeout(() => {
-          stepImg.src = STEP_IMAGES[i];
-          stepImg.classList.add('visible');
-        }, 60);
-      }
-
-      function stopStepLoop() {
-        if (stepTimer) {
-          clearTimeout(stepTimer);
-          stepTimer = null;
-        }
-      }
-
-      function scheduleNextStep() {
-        stopStepLoop();
-        if (!isFound) return;
-
-        const duration = STEP_DURATIONS[stepIndex] || 3500;
-
-        stepTimer = setTimeout(() => {
-          if (!isFound) return;
-          const next = (stepIndex + 1) % STEP_IMAGES.length;
-          showStep(next);
-          scheduleNextStep();
-        }, duration);
-      }
-
-      function startStepLoop() {
-        stopStepLoop();
-        showStep(0);
-        scheduleNextStep();
-      }
-
-      function resetDisplay() {
-        stopStepLoop();
-        stepImg.classList.remove('visible');
-      }
-
-      function setARVisible(visible) {
-        if (visible) {
-          arStage.classList.add('active');
-          guide.classList.add('guide-hidden');
-        } else {
-          arStage.classList.remove('active');
-          guide.classList.remove('guide-hidden');
-        }
-      }
-
-      function onMarkerFound() {
-        if (isFound) return;
-        isFound = true;
-        setARVisible(true);
-        startStepLoop();
-        scheduleBgmPlay();
-      }
-
-      function onMarkerLost() {
-        if (!isFound) return;
-        isFound = false;
-        setARVisible(false);
-        resetDisplay();
-        scheduleBgmPause();
-      }
-
-      async function startCamera() {
-        startBtn.disabled = true;
-        retryBtn.style.display = 'none';
-        errorText.style.display = 'none';
-        errorText.textContent = '';
-
-        try {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('このブラウザはカメラAPIに十分対応していません。');
-          }
-
-          const constraintsList = [
-            {
-              video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-              },
-              audio: false
-            },
-            {
-              video: {
-                facingMode: 'environment'
-              },
-              audio: false
-            },
-            {
-              video: true,
-              audio: false
-            }
-          ];
-
-          let lastError = null;
-
-          for (const constraints of constraintsList) {
-            try {
-              stream = await navigator.mediaDevices.getUserMedia(constraints);
-              break;
-            } catch (err) {
-              lastError = err;
-            }
-          }
-
-          if (!stream) {
-            throw lastError || new Error('カメラを起動できませんでした。');
-          }
-
-          bgVideo.srcObject = stream;
-          bgVideo.setAttribute('playsinline', '');
-          bgVideo.setAttribute('webkit-playsinline', '');
-          bgVideo.muted = true;
-          await bgVideo.play();
-
-          await unlockBgm();
-
-          overlay.classList.add('hidden');
-          started = true;
-          foundCount = 0;
-          lostCount = 0;
-          isFound = false;
-          setARVisible(false);
-          clearBgmTimers();
-          try {
-            bgm.pause();
-          } catch (e) {}
-        } catch (err) {
-          console.error(err);
-          errorText.style.display = 'block';
-          errorText.textContent =
-            'カメラを起動できませんでした。\n' +
-            '・Safari / Chrome で開いているか\n' +
-            '・GitHub Pages の URL で開いているか\n' +
-            '・カメラ権限を許可しているか\n\n' +
-            '詳細: ' + (err && err.message ? err.message : String(err));
-          retryBtn.style.display = 'inline-block';
-          startBtn.disabled = false;
-        }
-      }
-
-      function stopCamera() {
-        clearBgmTimers();
-        try {
-          bgm.pause();
-        } catch (e) {}
-
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-          stream = null;
-        }
-      }
-
-      function analyzeWindow(data, sw, sh, rect) {
-        const x0 = Math.max(0, Math.floor(rect.x));
-        const y0 = Math.max(0, Math.floor(rect.y));
-        const rw = Math.min(sw - x0, Math.floor(rect.w));
-        const rh = Math.min(sh - y0, Math.floor(rect.h));
-
-        if (rw < 20 || rh < 20) return null;
-
-        const tx0 = x0 + Math.floor(rw * 0.18);
-        const ty0 = y0 + Math.floor(rh * 0.15);
-        const trw = Math.floor(rw * 0.64);
-        const trh = Math.floor(rh * 0.60);
-
-        let total = 0;
-        let whiteCount = 0;
-        let blackCount = 0;
-        let blueCount = 0;
-
-        let textTotal = 0;
-        let textDarkCount = 0;
-
-        let borderTotal = 0;
-        let borderBlueCount = 0;
-
-        const borderThickness = Math.max(6, Math.floor(Math.min(rw, rh) * 0.10));
-
-        for (let y = y0; y < y0 + rh; y += 2) {
-          for (let x = x0; x < x0 + rw; x += 2) {
-            const i = (y * sw + x) * 4;
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-
-            total++;
-
-            if (lum > 168) whiteCount++;
-            if (lum < 105) blackCount++;
-            if (b > 90 && b > r + 12 && b > g + 8) blueCount++;
-
-            const nearBorder =
-              (x < x0 + borderThickness) ||
-              (x > x0 + rw - borderThickness) ||
-              (y < y0 + borderThickness) ||
-              (y > y0 + rh - borderThickness);
-
-            if (nearBorder) {
-              borderTotal++;
-              if (b > 90 && b > r + 12 && b > g + 8) borderBlueCount++;
-            }
-
-            const inTextArea =
-              x >= tx0 && x < tx0 + trw &&
-              y >= ty0 && y < ty0 + trh;
-
-            if (inTextArea) {
-              textTotal++;
-              if (lum < 110) textDarkCount++;
-            }
-          }
-        }
-
-        if (total === 0 || textTotal === 0 || borderTotal === 0) return null;
-
-        return {
-          whiteRatio: whiteCount / total,
-          blackRatio: blackCount / total,
-          blueRatio: blueCount / total,
-          textDarkRatio: textDarkCount / textTotal,
-          borderBlueRatio: borderBlueCount / borderTotal,
-          areaRatio: (rw * rh) / (sw * sh)
-        };
-      }
-
-      function scoreMarker(m) {
-        if (!m) return 0;
-
-        let score = 0;
-
-        if (m.whiteRatio > 0.32 && m.whiteRatio < 0.92) score += 1;
-        if (m.blackRatio > 0.025 && m.blackRatio < 0.34) score += 1;
-        if (m.textDarkRatio > 0.035 && m.textDarkRatio < 0.48) score += 1;
-        if (m.blueRatio > 0.003) score += 1;
-        if (m.borderBlueRatio > 0.004) score += 1;
-        if (m.areaRatio > 0.10 && m.areaRatio < 0.72) score += 1;
-
-        return score;
-      }
-
-      function findBestMarker(data, sw, sh) {
-        const windows = [
-          { x: sw * 0.10, y: sh * 0.08, w: sw * 0.80, h: sh * 0.80 },
-          { x: sw * 0.18, y: sh * 0.12, w: sw * 0.64, h: sh * 0.72 },
-          { x: sw * 0.24, y: sh * 0.16, w: sw * 0.52, h: sh * 0.62 }
-        ];
-
-        let best = null;
-        let bestScore = -1;
-
-        for (const rect of windows) {
-          const m = analyzeWindow(data, sw, sh, rect);
-          const score = scoreMarker(m);
-          if (score > bestScore) {
-            bestScore = score;
-            best = m;
-          }
-        }
-
-        return { best, bestScore };
-      }
-
-      function detectLoop() {
-        requestAnimationFrame(detectLoop);
-
-        if (!started) return;
-        if (!bgVideo.videoWidth) return;
-
-        frameCount++;
-        if (frameCount % 2 !== 0) return;
-
-        try {
-          procCtx.drawImage(bgVideo, 0, 0, SCAN_W, SCAN_H);
-          const imageData = procCtx.getImageData(0, 0, SCAN_W, SCAN_H);
-          const data = imageData.data;
-
-          const result = findBestMarker(data, SCAN_W, SCAN_H);
-          const m = result.best;
-          const bestScore = result.bestScore;
-
-          const detected = !!m && bestScore >= 5;
-
-          if (detected) {
-            foundCount++;
-            lostCount = 0;
-            if (foundCount >= FOUND_NEED) onMarkerFound();
-          } else {
-            lostCount++;
-            foundCount = 0;
-            if (lostCount >= LOST_NEED) onMarkerLost();
-          }
-
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      startBtn.addEventListener('click', startCamera);
-      retryBtn.addEventListener('click', startCamera);
-      window.addEventListener('beforeunload', stopCamera);
-
-      preloadImages();
-      setARVisible(false);
-      detectLoop();
-    })();
-  </script>
+preloadImages();
+updateDots(-1);
+setARVisible(false);
+detectLoop();
+})();
+</script>
 </body>
 </html>
